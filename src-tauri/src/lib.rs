@@ -12,6 +12,7 @@ mod tray;
 mod utils;
 
 use managers::audio::AudioRecordingManager;
+use managers::batch::BatchTranscriptionManager;
 use managers::history::HistoryManager;
 use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
@@ -67,12 +68,17 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     );
     let history_manager =
         Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
+    let batch_manager = Arc::new(
+        BatchTranscriptionManager::new(app_handle, transcription_manager.clone())
+            .expect("Failed to initialize batch transcription manager"),
+    );
 
     // Add managers to Tauri's managed state
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    app_handle.manage(batch_manager.clone());
 
     // Initialize the shortcuts
     shortcut::init_shortcuts(app_handle);
@@ -273,7 +279,17 @@ pub fn run() {
             commands::history::get_audio_file_path,
             commands::history::delete_history_entry,
             commands::history::update_history_limit,
-            commands::settings::pick_directory
+            commands::settings::pick_directory,
+            commands::batch::process_batch_now,
+            commands::batch::get_batch_settings,
+            commands::batch::update_batch_settings,
+            commands::batch::set_batch_enabled,
+            commands::batch::add_watch_folder,
+            commands::batch::remove_watch_folder,
+            commands::batch::set_check_interval,
+            commands::batch::set_stability_timeout,
+            commands::batch::set_delete_after_transcription,
+            commands::batch::set_save_to_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

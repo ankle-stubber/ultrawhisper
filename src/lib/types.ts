@@ -43,6 +43,19 @@ export type PasteMethod = z.infer<typeof PasteMethodSchema>;
 export const ClipboardHandlingSchema = z.enum(["dont_modify", "copy_to_clipboard"]);
 export type ClipboardHandling = z.infer<typeof ClipboardHandlingSchema>;
 
+export const BatchTranscriptionSettingsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  watch_folders: z.array(z.string()).optional().default([]),
+  check_interval_seconds: z.number().optional().default(60),
+  stability_timeout_seconds: z.number().optional().default(30),
+  output_suffix: z.string().optional().default("_transcribed"),
+  delete_after_transcription: z.boolean().optional().default(false),
+  save_to_history: z.boolean().optional().default(false),
+  min_file_size_kb: z.number().optional().default(1),
+  max_file_size_mb: z.number().optional().default(500),
+});
+export type BatchTranscriptionSettings = z.infer<typeof BatchTranscriptionSettingsSchema>;
+
 export const SettingsSchema = z.object({
   bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
@@ -68,6 +81,17 @@ export const SettingsSchema = z.object({
   history_limit: z.number().optional().default(5),
   paste_method: PasteMethodSchema.optional().default("ctrl_v"),
   clipboard_handling: ClipboardHandlingSchema.optional().default("dont_modify"),
+  batch_transcription: BatchTranscriptionSettingsSchema.optional().default({
+    enabled: false,
+    watch_folders: [],
+    check_interval_seconds: 60,
+    stability_timeout_seconds: 30,
+    output_suffix: "_transcribed",
+    delete_after_transcription: false,
+    save_to_history: false,
+    min_file_size_kb: 1,
+    max_file_size_mb: 500,
+  }),
 });
 
 export const BindingResponseSchema = z.object({
