@@ -133,6 +133,65 @@ impl SoundTheme {
     }
 }
 
+/// Batch transcription settings
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchTranscriptionSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub watch_folders: Vec<String>,
+    #[serde(default = "default_check_interval_seconds")]
+    pub check_interval_seconds: u64,
+    #[serde(default = "default_stability_timeout_seconds")]
+    pub stability_timeout_seconds: u64,
+    #[serde(default = "default_output_suffix")]
+    pub output_suffix: String,
+    #[serde(default)]
+    pub delete_after_transcription: bool,
+    #[serde(default)]
+    pub save_to_history: bool,
+    #[serde(default = "default_min_file_size_kb")]
+    pub min_file_size_kb: u64,
+    #[serde(default = "default_max_file_size_mb")]
+    pub max_file_size_mb: u64,
+}
+
+impl Default for BatchTranscriptionSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            watch_folders: Vec::new(),
+            check_interval_seconds: default_check_interval_seconds(),
+            stability_timeout_seconds: default_stability_timeout_seconds(),
+            output_suffix: default_output_suffix(),
+            delete_after_transcription: false,
+            save_to_history: false,
+            min_file_size_kb: default_min_file_size_kb(),
+            max_file_size_mb: default_max_file_size_mb(),
+        }
+    }
+}
+
+fn default_check_interval_seconds() -> u64 {
+    60 // 1 minute
+}
+
+fn default_stability_timeout_seconds() -> u64 {
+    30 // 30 seconds
+}
+
+fn default_output_suffix() -> String {
+    "_transcribed".to_string()
+}
+
+fn default_min_file_size_kb() -> u64 {
+    1 // 1 KB minimum
+}
+
+fn default_max_file_size_mb() -> u64 {
+    500 // 500 MB maximum
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -175,6 +234,8 @@ pub struct AppSettings {
     pub paste_method: PasteMethod,
     #[serde(default)]
     pub clipboard_handling: ClipboardHandling,
+    #[serde(default)]
+    pub batch_transcription: BatchTranscriptionSettings,
 }
 
 fn default_model() -> String {
@@ -300,6 +361,7 @@ pub fn get_default_settings() -> AppSettings {
         history_limit: default_history_limit(),
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
+        batch_transcription: BatchTranscriptionSettings::default(),
     }
 }
 
