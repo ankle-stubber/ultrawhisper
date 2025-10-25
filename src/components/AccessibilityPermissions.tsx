@@ -80,7 +80,7 @@ const AccessibilityPermissions: React.FC = () => {
       <div className="flex justify-between items-center gap-2">
         <div className="">
           <p className="text-sm font-medium">
-            Please grant accessibility permissions for Handy
+            Please grant accessibility permissions for UltraWhisper
           </p>
         </div>
         <button

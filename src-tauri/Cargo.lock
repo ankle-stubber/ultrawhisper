@@ -2251,50 +2251,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "handy"
-version = "0.5.4"
-dependencies = [
- "anyhow",
- "chrono",
- "cpal",
- "enigo",
- "env_logger 0.11.6",
- "flate2",
- "futures-util",
- "hound",
- "log",
- "natural",
- "once_cell",
- "rdev",
- "reqwest 0.11.27",
- "rodio",
- "rubato",
- "rusqlite",
- "rustfft",
- "serde",
- "serde_json",
- "strsim",
- "tar",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-fs",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-macos-permissions",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-sql",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "tokio",
- "transcribe-rs",
- "vad-rs",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7014,6 +6970,50 @@ dependencies = [
  "memoffset",
  "tempfile",
  "winapi",
+]
+
+[[package]]
+name = "ultrawhisper"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "cpal",
+ "enigo",
+ "env_logger 0.11.6",
+ "flate2",
+ "futures-util",
+ "hound",
+ "log",
+ "natural",
+ "once_cell",
+ "rdev",
+ "reqwest 0.11.27",
+ "rodio",
+ "rubato",
+ "rusqlite",
+ "rustfft",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tar",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-fs",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-macos-permissions",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-sql",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "tokio",
+ "transcribe-rs",
+ "vad-rs",
 ]
 
 [[package]]

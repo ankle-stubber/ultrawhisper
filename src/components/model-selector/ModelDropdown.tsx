@@ -65,7 +65,7 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
       {isFirstRun && (
         <div className="px-3 py-2 bg-logo-primary/10 border-b border-logo-primary/20">
           <div className="text-xs font-medium text-logo-primary mb-1">
-            Welcome to Handy!
+            Welcome to UltraWhisper!
           </div>
           <div className="text-xs text-text/70">
             Download a model below to get started with transcription.

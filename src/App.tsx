@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import Footer from "./components/footer";
-import HandyTextLogo from "./components/icons/HandyTextLogo";
+import UltraWhisperTextLogo from "./components/icons/UltraWhisperTextLogo";
 import Onboarding from "./components/onboarding";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
@@ -70,7 +70,7 @@ function App() {
     return (
       <div className="h-screen flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-center p-4 gap-2">
-          <HandyTextLogo width={200} />
+          <UltraWhisperTextLogo width={200} />
           <Onboarding onModelSelected={handleModelSelected} />
         </div>
       </div>

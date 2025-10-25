@@ -243,7 +243,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   if (isLoading) {
     return (
       <SettingContainer
-        title="Handy Shortcuts"
+        title="UltraWhisper Shortcuts"
         description="Configure keyboard shortcuts to trigger speech-to-text recording"
         descriptionMode={descriptionMode}
         grouped={grouped}
@@ -257,7 +257,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   if (Object.keys(bindings).length === 0) {
     return (
       <SettingContainer
-        title="Handy Shortcuts"
+        title="UltraWhisper Shortcuts"
         description="Configure keyboard shortcuts to trigger speech-to-text recording"
         descriptionMode={descriptionMode}
         grouped={grouped}
@@ -269,7 +269,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
 
   return (
     <SettingContainer
-      title="Handy Shortcut"
+      title="UltraWhisper Shortcut"
       description="Set the keyboard shortcut to start and stop speech-to-text recording"
       descriptionMode={descriptionMode}
       grouped={grouped}

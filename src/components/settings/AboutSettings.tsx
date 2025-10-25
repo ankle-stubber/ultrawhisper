@@ -35,7 +35,7 @@ export const AboutSettings: React.FC = () => {
       <SettingsGroup title="About">
         <SettingContainer
           title="Version"
-          description="Current version of Handy"
+          description="Current version of UltraWhisper"
           grouped={true}
         >
           <span className="text-sm font-mono">v{version}</span>
@@ -49,7 +49,7 @@ export const AboutSettings: React.FC = () => {
           <Button
             variant="secondary"
             size="md"
-            onClick={() => openUrl("https://github.com/cjpais/Handy")}
+            onClick={() => openUrl("https://github.com/ankle-stubber/ultrawhisper")}
           >
             View on GitHub
           </Button>
@@ -57,7 +57,7 @@ export const AboutSettings: React.FC = () => {
 
         <SettingContainer
           title="Support Development"
-          description="Help us continue building Handy"
+          description="Help us continue building UltraWhisper"
           grouped={true}
         >
           <Button variant="primary" size="md" onClick={handleDonateClick}>
