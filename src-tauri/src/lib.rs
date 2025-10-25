@@ -3,6 +3,7 @@ mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
 mod commands;
+mod file_output;
 mod managers;
 mod overlay;
 mod settings;

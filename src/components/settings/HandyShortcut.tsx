@@ -267,47 +267,51 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
     );
   }
 
+  // Sort bindings by key for consistent ordering
+  const sortedBindings = Object.entries(bindings)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, binding]) => ({ id, binding }));
+
   return (
     <SettingContainer
-      title="UltraWhisper Shortcut"
-      description="Set the keyboard shortcut to start and stop speech-to-text recording"
+      title="UltraWhisper Shortcuts"
+      description="Configure keyboard shortcuts for different transcription workflows"
       descriptionMode={descriptionMode}
       grouped={grouped}
     >
-      {(() => {
-        const primaryBinding = Object.values(bindings)[0];
-        const primaryId = Object.keys(bindings)[0];
-
-        if (!primaryBinding) {
-          return (
-            <div className="text-sm text-mid-gray">No shortcuts configured</div>
-          );
-        }
-
-        return (
-          <div className="flex items-center space-x-1">
-            {editingShortcutId === primaryId ? (
-              <div
-                ref={(ref) => setShortcutRef(primaryId, ref)}
-                className="px-2 py-1 text-sm font-semibold border border-logo-primary bg-logo-primary/30 rounded min-w-[120px] text-center"
-              >
-                {formatCurrentKeys()}
+      <div className="space-y-3">
+        {sortedBindings.map(({ id, binding }) => (
+          <div key={id} className="flex flex-col space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{binding.name}</span>
+                <span className="text-xs text-mid-gray">{binding.description}</span>
               </div>
-            ) : (
-              <div
-                className="px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary"
-                onClick={() => startRecording(primaryId)}
-              >
-                {formatKeyCombination(primaryBinding.current_binding, osType)}
+              <div className="flex items-center space-x-1">
+                {editingShortcutId === id ? (
+                  <div
+                    ref={(ref) => setShortcutRef(id, ref)}
+                    className="px-2 py-1 text-sm font-semibold border border-logo-primary bg-logo-primary/30 rounded min-w-[120px] text-center"
+                  >
+                    {formatCurrentKeys()}
+                  </div>
+                ) : (
+                  <div
+                    className="px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary"
+                    onClick={() => startRecording(id)}
+                  >
+                    {formatKeyCombination(binding.current_binding, osType)}
+                  </div>
+                )}
+                <ResetButton
+                  onClick={() => resetBinding(id)}
+                  disabled={isUpdating(`binding_${id}`)}
+                />
               </div>
-            )}
-            <ResetButton
-              onClick={() => resetBinding(primaryId)}
-              disabled={isUpdating(`binding_${primaryId}`)}
-            />
+            </div>
           </div>
-        );
-      })()}
+        ))}
+      </div>
     </SettingContainer>
   );
 };
