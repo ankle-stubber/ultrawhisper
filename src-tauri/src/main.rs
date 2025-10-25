@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    handy_app_lib::run()
+    ultrawhisper_app_lib::run()
 }

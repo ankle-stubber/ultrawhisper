@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Handy",
-  "version": "0.5.4",
-  "identifier": "com.pais.handy",
+  "productName": "UltraWhisper",
+  "version": "0.1.0",
+  "identifier": "com.ultrawhisper.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Handy",
+        "title": "UltraWhisper",
         "width": 680,
         "height": 520,
         "minWidth": 680,
