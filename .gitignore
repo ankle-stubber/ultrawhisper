@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 /target/
+docs_internal/
 recording_*
 .crush/
 .claude/
