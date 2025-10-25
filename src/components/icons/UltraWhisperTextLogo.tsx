@@ -14,7 +14,7 @@ const UltraWhisperTextLogo = ({
       className={`font-bold ${className}`}
       style={{
         fontSize: width ? `${width / 8}px` : '24px',
-        color: '#F9C5E8',
+        color: '#17951e',
         fontFamily: 'system-ui, -apple-system, sans-serif'
       }}
     >
