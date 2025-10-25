@@ -22,6 +22,12 @@ interface SettingsStore {
   refreshAudioDevices: () => Promise<void>;
   refreshOutputDevices: () => Promise<void>;
   updateBinding: (id: string, binding: string) => Promise<void>;
+  updateBindingOutputConfig: (
+    id: string,
+    pasteToWindow: boolean,
+    saveToFile: boolean,
+    outputPath: string | null
+  ) => Promise<void>;
   resetBinding: (id: string) => Promise<void>;
   getSetting: <K extends keyof Settings>(key: K) => Settings[K] | undefined;
   isUpdatingKey: (key: string) => boolean;
@@ -308,6 +314,50 @@ export const useSettingsStore = create<SettingsStore>()(
                 }
               : null,
           }));
+        }
+      } finally {
+        setUpdating(updateKey, false);
+      }
+    },
+
+    // Update binding output configuration
+    updateBindingOutputConfig: async (id, pasteToWindow, saveToFile, outputPath) => {
+      const { settings, setUpdating } = get();
+      const updateKey = `binding_output_${id}`;
+
+      setUpdating(updateKey, true);
+
+      try {
+        // Optimistic update
+        set((state) => ({
+          settings: state.settings
+            ? {
+                ...state.settings,
+                bindings: {
+                  ...state.settings.bindings,
+                  [id]: {
+                    ...state.settings.bindings[id],
+                    paste_to_window: pasteToWindow,
+                    save_to_file: saveToFile,
+                    output_path: outputPath,
+                  },
+                },
+              }
+            : null,
+        }));
+
+        await invoke("update_binding_output_config", {
+          id,
+          pasteToWindow,
+          saveToFile,
+          outputPath,
+        });
+      } catch (error) {
+        console.error(`Failed to update binding output config for ${id}:`, error);
+
+        // Rollback on error
+        if (get().settings) {
+          await get().refreshSettings();
         }
       } finally {
         setUpdating(updateKey, false);

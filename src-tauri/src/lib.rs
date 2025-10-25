@@ -3,6 +3,7 @@ mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
 mod commands;
+mod file_output;
 mod managers;
 mod overlay;
 mod settings;
@@ -164,6 +165,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -221,6 +223,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             shortcut::change_binding,
             shortcut::reset_binding,
+            shortcut::update_binding_output_config,
             shortcut::change_ptt_setting,
             shortcut::change_audio_feedback_setting,
             shortcut::change_audio_feedback_volume_setting,
@@ -269,7 +272,8 @@ pub fn run() {
             commands::history::toggle_history_entry_saved,
             commands::history::get_audio_file_path,
             commands::history::delete_history_entry,
-            commands::history::update_history_limit
+            commands::history::update_history_limit,
+            commands::settings::pick_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

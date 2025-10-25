@@ -6,6 +6,9 @@ export const ShortcutBindingSchema = z.object({
   description: z.string(),
   default_binding: z.string(),
   current_binding: z.string(),
+  paste_to_window: z.boolean().optional().default(true),
+  save_to_file: z.boolean().optional().default(false),
+  output_path: z.string().nullable().optional(),
 });
 
 export const ShortcutBindingsMapSchema = z.record(

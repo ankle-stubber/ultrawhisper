@@ -10,6 +10,20 @@ pub struct ShortcutBinding {
     pub description: String,
     pub default_binding: String,
     pub current_binding: String,
+    #[serde(default = "default_paste_to_window")]
+    pub paste_to_window: bool,
+    #[serde(default = "default_save_to_file")]
+    pub save_to_file: bool,
+    #[serde(default)]
+    pub output_path: Option<String>,
+}
+
+fn default_paste_to_window() -> bool {
+    true
+}
+
+fn default_save_to_file() -> bool {
+    false
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +240,16 @@ pub fn get_default_settings() -> AppSettings {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     let default_shortcut = "alt+space";
 
+    // Define the second shortcut for file output
+    #[cfg(target_os = "windows")]
+    let file_shortcut = "ctrl+alt+t";
+    #[cfg(target_os = "macos")]
+    let file_shortcut = "cmd+option+t";
+    #[cfg(target_os = "linux")]
+    let file_shortcut = "ctrl+alt+t";
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    let file_shortcut = "ctrl+alt+t";
+
     let mut bindings = HashMap::new();
     bindings.insert(
         "transcribe".to_string(),
@@ -235,6 +259,22 @@ pub fn get_default_settings() -> AppSettings {
             description: "Converts your speech into text.".to_string(),
             default_binding: default_shortcut.to_string(),
             current_binding: default_shortcut.to_string(),
+            paste_to_window: true,
+            save_to_file: false,
+            output_path: None,
+        },
+    );
+    bindings.insert(
+        "transcribe_to_file".to_string(),
+        ShortcutBinding {
+            id: "transcribe_to_file".to_string(),
+            name: "Save to File".to_string(),
+            description: "Saves transcription as markdown file.".to_string(),
+            default_binding: file_shortcut.to_string(),
+            current_binding: file_shortcut.to_string(),
+            paste_to_window: false,
+            save_to_file: true,
+            output_path: Some("Documents/UltraWhisper".to_string()),
         },
     );
 
@@ -269,7 +309,7 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    let settings = if let Some(settings_value) = store.get("settings") {
+    let mut settings = if let Some(settings_value) = store.get("settings") {
         // Parse the entire settings object
         match serde_json::from_value::<AppSettings>(settings_value) {
             Ok(settings) => {
@@ -297,6 +337,35 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
 
         default_settings
     };
+
+    // Migration: ensure the file-output binding exists for existing users
+    if !settings.bindings.contains_key("transcribe_to_file") {
+        #[cfg(target_os = "windows")]
+        let file_shortcut = "ctrl+alt+t";
+        #[cfg(target_os = "macos")]
+        let file_shortcut = "cmd+option+t";
+        #[cfg(target_os = "linux")]
+        let file_shortcut = "ctrl+alt+t";
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        let file_shortcut = "ctrl+alt+t";
+
+        settings.bindings.insert(
+            "transcribe_to_file".to_string(),
+            ShortcutBinding {
+                id: "transcribe_to_file".to_string(),
+                name: "Save to File".to_string(),
+                description: "Saves transcription as markdown file.".to_string(),
+                default_binding: file_shortcut.to_string(),
+                current_binding: file_shortcut.to_string(),
+                paste_to_window: false,
+                save_to_file: true,
+                output_path: Some("Documents/UltraWhisper".to_string()),
+            },
+        );
+
+        // Persist the migrated settings
+        store.set("settings", serde_json::to_value(&settings).unwrap());
+    }
 
     settings
 }
