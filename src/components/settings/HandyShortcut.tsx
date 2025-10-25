@@ -8,6 +8,7 @@ import {
 } from "../../lib/utils/keyboard";
 import { ResetButton } from "../ui/ResetButton";
 import { SettingContainer } from "../ui/SettingContainer";
+import { ShortcutOutputConfig } from "./ShortcutOutputConfig";
 import { useSettings } from "../../hooks/useSettings";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
@@ -309,6 +310,7 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
                 />
               </div>
             </div>
+            <ShortcutOutputConfig binding={binding} />
           </div>
         ))}
       </div>

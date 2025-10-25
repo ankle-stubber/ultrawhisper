@@ -310,6 +310,29 @@ fn validate_shortcut_string(raw: &str) -> Result<(), String> {
     }
 }
 
+/// Update the output configuration for a specific binding
+#[tauri::command]
+pub fn update_binding_output_config(
+    app: AppHandle,
+    id: String,
+    paste_to_window: bool,
+    save_to_file: bool,
+    output_path: Option<String>
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+
+    if let Some(binding) = settings.bindings.get_mut(&id) {
+        binding.paste_to_window = paste_to_window;
+        binding.save_to_file = save_to_file;
+        binding.output_path = output_path;
+
+        settings::write_settings(&app, settings);
+        Ok(())
+    } else {
+        Err(format!("Binding with id '{}' not found", id))
+    }
+}
+
 /// Temporarily unregister a binding while the user is editing it in the UI.
 /// This avoids firing the action while keys are being recorded.
 #[tauri::command]

@@ -10,6 +10,20 @@ pub struct ShortcutBinding {
     pub description: String,
     pub default_binding: String,
     pub current_binding: String,
+    #[serde(default = "default_paste_to_window")]
+    pub paste_to_window: bool,
+    #[serde(default = "default_save_to_file")]
+    pub save_to_file: bool,
+    #[serde(default)]
+    pub output_path: Option<String>,
+}
+
+fn default_paste_to_window() -> bool {
+    true
+}
+
+fn default_save_to_file() -> bool {
+    false
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,6 +259,9 @@ pub fn get_default_settings() -> AppSettings {
             description: "Converts your speech into text.".to_string(),
             default_binding: default_shortcut.to_string(),
             current_binding: default_shortcut.to_string(),
+            paste_to_window: true,
+            save_to_file: false,
+            output_path: None,
         },
     );
     bindings.insert(
@@ -255,6 +272,9 @@ pub fn get_default_settings() -> AppSettings {
             description: "Saves transcription as markdown file.".to_string(),
             default_binding: file_shortcut.to_string(),
             current_binding: file_shortcut.to_string(),
+            paste_to_window: false,
+            save_to_file: true,
+            output_path: Some("Documents/UltraWhisper".to_string()),
         },
     );
 
@@ -337,6 +357,9 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
                 description: "Saves transcription as markdown file.".to_string(),
                 default_binding: file_shortcut.to_string(),
                 current_binding: file_shortcut.to_string(),
+                paste_to_window: false,
+                save_to_file: true,
+                output_path: Some("Documents/UltraWhisper".to_string()),
             },
         );
 
