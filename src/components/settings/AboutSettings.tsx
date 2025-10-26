@@ -49,33 +49,57 @@ export const AboutSettings: React.FC = () => {
           <Button
             variant="secondary"
             size="md"
-            onClick={() => openUrl("https://github.com/ankle-stubber/ultrawhisper")}
+            onClick={() =>
+              openUrl("https://github.com/ankle-stubber/ultrawhisper")
+            }
           >
-            View on GitHub
-          </Button>
-        </SettingContainer>
-
-        <SettingContainer
-          title="Support Development"
-          description="Help us continue building UltraWhisper"
-          grouped={true}
-        >
-          <Button variant="primary" size="md" onClick={handleDonateClick}>
-            Donate
+            UltraWhisper on GitHub
           </Button>
         </SettingContainer>
       </SettingsGroup>
 
       <SettingsGroup title="Acknowledgments">
         <SettingContainer
-          title="Whisper.cpp"
-          description="High-performance inference of OpenAI's Whisper automatic speech recognition model"
+          title="Handy"
+          description="UltraWhisper is built on the foundation of Handy"
           grouped={true}
           layout="stacked"
         >
           <div className="text-sm text-mid-gray">
-            Handy uses Whisper.cpp for fast, local speech-to-text processing.
-            Thanks to the amazing work by Georgi Gerganov and contributors.
+            UltraWhisper started with a fork of Handy, which is a great
+            open-source project that provides a robust and user-friendly
+            platform for speech recognition and transcription. Check the project
+            out and show them some love!
+          </div>
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleDonateClick}
+            className="mt-2"
+          >
+            Donate to Handy
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => openUrl("https://github.com/cjpais/handy")}
+          >
+            View Original Handy
+          </Button>
+        </SettingContainer>
+
+        <SettingContainer
+          title="Whisper.cpp"
+          description="High-performance inference of
+          OpenAI's Whisper automatic speech recognition model"
+          grouped={true}
+          layout="stacked"
+        >
+          <div className="text-sm text-mid-gray">
+            UltraWhisper uses Whisper.cpp for fast, local speech-to-text
+            processing. Thanks to the amazing work by Georgi Gerganov and
+            contributors.
           </div>
         </SettingContainer>
       </SettingsGroup>

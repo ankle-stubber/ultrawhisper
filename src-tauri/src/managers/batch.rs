@@ -1,9 +1,11 @@
 use crate::audio_toolkit::audio::load_wav_file;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::get_settings;
+use crate::templates::{apply_template, format_timestamp};
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -510,12 +512,87 @@ impl BatchTranscriptionManagerThread {
 
     /// Get output file path for a given input file
     fn get_output_path(&self, input_path: &Path, output_suffix: &str) -> PathBuf {
+        let settings = get_settings(&self.app_handle);
+        let batch_settings = &settings.batch_transcription;
+
         let file_stem = input_path.file_stem().unwrap().to_string_lossy();
         let output_name = format!("{}{}.md", file_stem, output_suffix);
-        input_path.with_file_name(output_name)
+
+        if let Some(ref output_folder) = batch_settings.output_folder {
+            // Expand tilde if present
+            let expanded_path = self.expand_tilde(output_folder);
+            let output_dir = PathBuf::from(expanded_path);
+
+            // Only create subdirectories if watching multiple folders to prevent collisions
+            let final_output_dir = if batch_settings.watch_folders.len() > 1 {
+                // Multiple watch folders - use subdirectory for organization
+                let source_folder_name = input_path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                output_dir.join(source_folder_name)
+            } else {
+                // Single watch folder - output directly to configured folder
+                output_dir
+            };
+
+            // Ensure the directory exists
+            if !final_output_dir.exists() {
+                if let Err(e) = fs::create_dir_all(&final_output_dir) {
+                    error!("Failed to create output directory: {:?}, error: {}", final_output_dir, e);
+                    // Fall back to source folder
+                    return input_path.with_file_name(output_name);
+                }
+            }
+
+            final_output_dir.join(output_name)
+        } else {
+            // Use source folder (original behavior)
+            input_path.with_file_name(output_name)
+        }
     }
 
-    /// Generate markdown content for output file
+    /// Helper function to expand ~ to home directory
+    fn expand_tilde(&self, path: &str) -> String {
+        if path.starts_with("~/") || path == "~" {
+            if let Ok(home) = std::env::var("HOME") {
+                return path.replacen("~", &home, 1);
+            }
+            // On Windows, try USERPROFILE
+            if let Ok(home) = std::env::var("USERPROFILE") {
+                return path.replacen("~", &home, 1);
+            }
+        }
+        path.to_string()
+    }
+
+    /// Validate output folder by attempting to write a temp file
+    pub fn validate_output_folder(&self, folder_path: &str) -> Result<(), String> {
+        let expanded_path = self.expand_tilde(folder_path);
+        let path = PathBuf::from(&expanded_path);
+
+        // Create directory if it doesn't exist
+        if !path.exists() {
+            fs::create_dir_all(&path)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+
+        // Try to write a temp file
+        let temp_file = path.join(".ultrawhisper_test");
+        fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&temp_file)
+            .map_err(|e| format!("Failed to write to directory: {}", e))?;
+
+        // Clean up temp file
+        let _ = fs::remove_file(temp_file);
+
+        Ok(())
+    }
+
+    /// Generate markdown content for output file using templates
     fn generate_markdown_output(
         &self,
         file_path: &Path,
@@ -524,48 +601,35 @@ impl BatchTranscriptionManagerThread {
         size_mb: u64,
         processing_time: f64,
     ) -> String {
-        let file_name = file_path.file_name().unwrap().to_string_lossy();
+        let file_name = file_path.file_name().unwrap().to_string_lossy().to_string();
+        let source_file = file_path.to_string_lossy().to_string();
 
-        // Format current time as YYYY-MM-DD HH:MM:SS
+        // Get current timestamp
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let datetime = std::time::UNIX_EPOCH + std::time::Duration::from_secs(now);
+        let timestamp = format_timestamp(now);
 
-        // Simple timestamp formatting without chrono
-        let timestamp = format!("{:?}", datetime); // Basic formatting for v1
-
+        // Get settings for model name and template
         let settings = get_settings(&self.app_handle);
         let model_name = settings.selected_model.clone();
+        let template_id = &settings.batch_transcription.template_id;
 
-        format!(
-            r#"# Transcription: {}
+        // Prepare variables for template substitution
+        let mut variables = HashMap::new();
+        variables.insert("filename", file_name);
+        variables.insert("timestamp", timestamp);
+        variables.insert("source_file", source_file);
+        variables.insert("duration", duration.to_string());
+        variables.insert("file_size_mb", size_mb.to_string());
+        variables.insert("model_name", model_name);
+        variables.insert("processing_time_s", format!("{:.1}", processing_time));
+        variables.insert("transcription_text", transcription.to_string());
+        variables.insert("workflow_name", "Batch Processing".to_string());
 
-**Date Processed:** {}
-**Original File:** {}
-**Duration:** {}
-**File Size:** {} MB
-**Model:** {}
-**Processing Time:** {:.1} seconds
-
----
-
-{}
-
----
-
-*Generated by UltraWhisper Batch Processor*
-"#,
-            file_name,
-            timestamp,
-            file_name,
-            duration,
-            size_mb,
-            model_name,
-            processing_time,
-            transcription
-        )
+        // Apply the template
+        apply_template(template_id, &variables)
     }
 }
 

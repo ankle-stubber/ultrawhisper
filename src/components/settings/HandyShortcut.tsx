@@ -244,8 +244,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   if (isLoading) {
     return (
       <SettingContainer
-        title="UltraWhisper Shortcuts"
-        description="Configure keyboard shortcuts to trigger speech-to-text recording"
+        title="UltraWhisper Workflows"
+        description="Configure workflows to trigger speech-to-text recording"
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
@@ -258,8 +258,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
   if (Object.keys(bindings).length === 0) {
     return (
       <SettingContainer
-        title="UltraWhisper Shortcuts"
-        description="Configure keyboard shortcuts to trigger speech-to-text recording"
+        title="UltraWhisper Workflows"
+        description="Configure workflows to trigger speech-to-text recording"
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
@@ -275,8 +275,8 @@ export const HandyShortcut: React.FC<HandyShortcutProps> = ({
 
   return (
     <SettingContainer
-      title="UltraWhisper Shortcuts"
-      description="Configure keyboard shortcuts for different transcription workflows"
+      title="UltraWhisper Workflows"
+      description="Configure workflows for different transcription actions"
       descriptionMode={descriptionMode}
       grouped={grouped}
     >

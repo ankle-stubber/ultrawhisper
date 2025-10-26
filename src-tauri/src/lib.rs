@@ -8,6 +8,7 @@ mod managers;
 mod overlay;
 mod settings;
 mod shortcut;
+mod templates;
 mod tray;
 mod utils;
 

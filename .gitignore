@@ -26,6 +26,7 @@ dist-ssr
 /target/
 docs_internal/
 plans_internal/
+scripts_internal/
 recording_*
 .crush/
 .claude/
