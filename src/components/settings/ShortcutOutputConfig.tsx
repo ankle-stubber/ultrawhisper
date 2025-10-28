@@ -144,20 +144,21 @@ export const ShortcutOutputConfig: React.FC<ShortcutOutputConfigProps> = ({
         <div className="space-y-2">
           <label className="text-xs text-mid-gray">Output directory</label>
           <div className="flex items-center gap-1">
-            <div className="flex-1 px-2 py-1 text-xs bg-mid-gray/10 rounded border border-mid-gray/20">
-              {outputPath ? (
-                <span className="font-mono">{formatPath(outputPath)}</span>
-              ) : (
-                <span className="italic text-mid-gray/60">
-                  Default: ~/Documents/UltraWhisper
-                </span>
-              )}
-            </div>
+            <input
+              type="text"
+              className="flex-1 px-2 py-1 text-xs bg-mid-gray/10 rounded border border-mid-gray/20 font-mono"
+              placeholder="Default: ~/Documents/UltraWhisper"
+              value={formatPath(outputPath)}
+              onChange={(e) => setOutputPath(e.target.value)}
+              onBlur={() => handleSave(pasteToWindow, saveToFile, outputPath)}
+              disabled={isUpdating(`binding_output_${binding.id}`)}
+              title="Enter folder path or use browse button"
+            />
             <button
               onClick={handleBrowse}
               disabled={isUpdating(`binding_output_${binding.id}`)}
               className="p-1 hover:bg-logo-primary/10 rounded"
-              title="Browse for folder"
+              title="Browse for folder (Note: Currently causes app to freeze)"
             >
               <Folder className="w-4 h-4" />
             </button>
@@ -172,6 +173,9 @@ export const ShortcutOutputConfig: React.FC<ShortcutOutputConfigProps> = ({
               </button>
             )}
           </div>
+          <p className="text-xs text-mid-gray/60 mt-1">
+            Type a path manually or leave blank for default. The browse button currently has issues.
+          </p>
         </div>
       )}
 

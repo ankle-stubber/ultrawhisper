@@ -29,6 +29,8 @@ export default function BatchProcessingSettings() {
     save_to_history: false,
     min_file_size_kb: 1,
     max_file_size_mb: 500,
+    output_folder: null,
+    template_id: "default_markdown",
   };
 
   const updateBatchSettings = useCallback(
@@ -181,6 +183,49 @@ export default function BatchProcessingSettings() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Output Folder */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium">Output Folder</label>
+
+          {/* Use source folder toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              id="use-source-folder"
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={!batchSettings.output_folder}
+              onChange={(e) => updateBatchSettings({ output_folder: e.target.checked ? null : "" })}
+            />
+            <label htmlFor="use-source-folder" className="text-sm">
+              Use source folder (save transcriptions next to original files)
+            </label>
+          </div>
+
+          {/* Output folder input - shown when not using source folder */}
+          {batchSettings.output_folder !== null && (
+            <div>
+              <input
+                type="text"
+                placeholder="e.g., ~/Documents/transcriptions"
+                className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
+                value={batchSettings.output_folder || ""}
+                onChange={(e) => updateBatchSettings({ output_folder: e.target.value || "" })}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {batchSettings.watch_folders.length > 1 ? (
+                  <>
+                    Files will be organized by source folder: {batchSettings.output_folder || ""}/<i>[source-folder]</i>/
+                    <br />
+                    <span className="text-xs">Subdirectories prevent naming conflicts when watching multiple folders</span>
+                  </>
+                ) : (
+                  <>All transcriptions will be saved directly to this folder</>
+                )}
+              </p>
             </div>
           )}
         </div>

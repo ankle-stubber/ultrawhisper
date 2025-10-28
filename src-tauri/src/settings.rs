@@ -154,6 +154,12 @@ pub struct BatchTranscriptionSettings {
     pub min_file_size_kb: u64,
     #[serde(default = "default_max_file_size_mb")]
     pub max_file_size_mb: u64,
+    /// Optional output folder for transcriptions. If None, saves to source folder
+    #[serde(default)]
+    pub output_folder: Option<String>,
+    /// Template ID for output formatting
+    #[serde(default = "default_template_id")]
+    pub template_id: String,
 }
 
 impl Default for BatchTranscriptionSettings {
@@ -168,6 +174,8 @@ impl Default for BatchTranscriptionSettings {
             save_to_history: false,
             min_file_size_kb: default_min_file_size_kb(),
             max_file_size_mb: default_max_file_size_mb(),
+            output_folder: None,
+            template_id: default_template_id(),
         }
     }
 }
@@ -190,6 +198,10 @@ fn default_min_file_size_kb() -> u64 {
 
 fn default_max_file_size_mb() -> u64 {
     500 // 500 MB maximum
+}
+
+fn default_template_id() -> String {
+    "default_markdown".to_string()
 }
 
 /* still handy for composing the initial JSON in the store ------------- */

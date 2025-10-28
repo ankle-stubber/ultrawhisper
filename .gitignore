@@ -26,6 +26,10 @@ dist-ssr
 /target/
 docs_internal/
 plans_internal/
+scripts_internal/
 recording_*
 .crush/
 .claude/
+
+# Icon generation virtual environment
+src-tauri/resources/icon_env/

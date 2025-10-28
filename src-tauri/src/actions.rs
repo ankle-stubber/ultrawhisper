@@ -143,12 +143,29 @@ impl ShortcutAction for UnifiedTranscribeAction {
                             transcription
                         );
                         if !transcription.is_empty() {
-                            // Save to history
+                            // Save to history with workflow information
                             let hm_clone = Arc::clone(&hm);
                             let transcription_for_history = transcription.clone();
+
+                            // Determine workflow based on binding configuration
+                            let (workflow_id, workflow_name) = if let Some(ref binding) = binding_config {
+                                if binding.save_to_file {
+                                    (Some("save_to_file"), Some("Save To File"))
+                                } else {
+                                    (Some("quick_transcribe"), Some("Quick Transcribe"))
+                                }
+                            } else {
+                                (Some("quick_transcribe"), Some("Quick Transcribe"))
+                            };
+
                             tauri::async_runtime::spawn(async move {
                                 if let Err(e) = hm_clone
-                                    .save_transcription(samples_clone, transcription_for_history)
+                                    .save_transcription(
+                                        samples_clone,
+                                        transcription_for_history,
+                                        workflow_id,
+                                        workflow_name,
+                                    )
                                     .await
                                 {
                                     error!("Failed to save transcription to history: {}", e);

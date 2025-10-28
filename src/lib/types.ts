@@ -53,6 +53,8 @@ export const BatchTranscriptionSettingsSchema = z.object({
   save_to_history: z.boolean().optional().default(false),
   min_file_size_kb: z.number().optional().default(1),
   max_file_size_mb: z.number().optional().default(500),
+  output_folder: z.string().nullable().optional(),
+  template_id: z.string().optional().default("default_markdown"),
 });
 export type BatchTranscriptionSettings = z.infer<typeof BatchTranscriptionSettingsSchema>;
 
