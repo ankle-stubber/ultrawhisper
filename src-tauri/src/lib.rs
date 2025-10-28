@@ -12,6 +12,12 @@ mod templates;
 mod tray;
 mod utils;
 
+// New modules for workflow architecture
+mod workflow;
+mod model_pool;
+mod router;
+mod streaming;
+
 use managers::audio::AudioRecordingManager;
 use managers::batch::BatchTranscriptionManager;
 use managers::history::HistoryManager;
@@ -80,6 +86,12 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
     app_handle.manage(batch_manager.clone());
+
+    // Initialize workflow architecture components (Phase 0)
+    let model_pool = Arc::new(model_pool::ModelPool::new(Arc::clone(&transcription_manager)));
+    let workflow_engine = Arc::new(workflow::WorkflowEngine::new(Arc::clone(&model_pool)));
+    app_handle.manage(model_pool);
+    app_handle.manage(workflow_engine);
 
     // Initialize the shortcuts
     shortcut::init_shortcuts(app_handle);

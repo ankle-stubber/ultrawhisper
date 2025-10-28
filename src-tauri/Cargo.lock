@@ -7060,6 +7060,7 @@ name = "ultrawhisper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "cpal",
  "enigo",
