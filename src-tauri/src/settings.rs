@@ -248,6 +248,8 @@ pub struct AppSettings {
     pub clipboard_handling: ClipboardHandling,
     #[serde(default)]
     pub batch_transcription: BatchTranscriptionSettings,
+    #[serde(default)]
+    pub use_workflow_engine: bool,
 }
 
 fn default_model() -> String {
@@ -374,6 +376,7 @@ pub fn get_default_settings() -> AppSettings {
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
         batch_transcription: BatchTranscriptionSettings::default(),
+        use_workflow_engine: false,
     }
 }
 
