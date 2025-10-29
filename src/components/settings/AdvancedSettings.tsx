@@ -7,6 +7,8 @@ import { SettingsGroup } from "../ui/SettingsGroup";
 import { StartHidden } from "./StartHidden";
 import { AutostartToggle } from "./AutostartToggle";
 import BatchProcessingSettings from "./BatchProcessingSettings";
+import { UseWorkflowEngine } from "./UseWorkflowEngine";
+import { StreamingSettings } from "./StreamingSettings";
 
 export const AdvancedSettings: React.FC = () => {
   return (
@@ -18,6 +20,16 @@ export const AdvancedSettings: React.FC = () => {
         <TranslateToEnglish descriptionMode="tooltip" grouped={true} />
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
+      </SettingsGroup>
+
+      {/* Workflow Engine Settings */}
+      <SettingsGroup title="Workflow Engine">
+        <UseWorkflowEngine descriptionMode="tooltip" grouped={true} />
+      </SettingsGroup>
+
+      {/* Streaming Settings */}
+      <SettingsGroup title="Streaming">
+        <StreamingSettings descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
       {/* Batch Processing as its own section */}
