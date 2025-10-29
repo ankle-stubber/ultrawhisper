@@ -318,7 +318,9 @@ impl WorkflowEngine {
         // TODO(PR5): Gate this with settings.streaming.enable_backfill
         // For now, always attempt backfill if a WAV file was saved
         let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
-        if let Some(file_name) = audio_manager.get_last_streaming_file_name() {
+        let saved_file_name = audio_manager.get_last_streaming_file_name();
+
+        if let Some(ref file_name) = saved_file_name {
             debug!(
                 "Attempting whole-file backfill from saved audio: {}",
                 file_name
@@ -329,7 +331,7 @@ impl WorkflowEngine {
 
             match crate::streaming::backfill::backfill_whole_file(
                 app,
-                &file_name,
+                file_name,
                 tm_state.inner().clone(),
             )
             .await
@@ -359,20 +361,38 @@ impl WorkflowEngine {
             debug!("Empty transcription; skipping history save and destination routing");
         } else {
             // Save to history with workflow tracking
-            // Note: We don't have the original audio samples in streaming mode,
-            // so we pass an empty vector
             let hm = app.state::<Arc<HistoryManager>>();
-            hm.save_transcription(
-                vec![], // No audio samples in streaming mode
-                final_transcript.clone(),
-                Some(&workflow.id),
-                Some(&workflow.name),
-            )
-            .await
-            .map_err(|e| {
-                error!("Failed to save to history: {}", e);
-                anyhow!("History save failed: {}", e)
-            })?;
+
+            // If we have a saved WAV file from the writer, use save_transcription_with_path
+            // which doesn't write the WAV again (it already exists). Otherwise, fall back
+            // to the legacy path with empty samples.
+            if let Some(file_name) = saved_file_name {
+                debug!("Saving to history using existing file: {}", file_name);
+                hm.save_transcription_with_path(
+                    file_name,
+                    final_transcript.clone(),
+                    Some(&workflow.id),
+                    Some(&workflow.name),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Failed to save to history with path: {}", e);
+                    anyhow!("History save failed: {}", e)
+                })?;
+            } else {
+                debug!("No saved file available; saving with empty samples");
+                hm.save_transcription(
+                    vec![], // No audio samples in streaming mode
+                    final_transcript.clone(),
+                    Some(&workflow.id),
+                    Some(&workflow.name),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Failed to save to history: {}", e);
+                    anyhow!("History save failed: {}", e)
+                })?;
+            }
 
             debug!("Saved to history with workflow_id: {}", workflow.id);
 
