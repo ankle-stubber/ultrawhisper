@@ -5,6 +5,7 @@ use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::overlay::{show_recording_overlay, show_transcribing_overlay};
 use crate::settings::get_settings;
+use crate::streaming::queue::create_bounded_queue;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils;
 use log::{debug, error};
@@ -62,32 +63,98 @@ impl ShortcutAction for UnifiedTranscribeAction {
 
         let rm = app.state::<Arc<AudioRecordingManager>>();
 
-        // Get the microphone mode to determine audio feedback timing
+        // Get settings to determine streaming mode
         let settings = get_settings(app);
         let is_always_on = settings.always_on_microphone;
-        debug!("Microphone mode - always_on: {}", is_always_on);
+        let streaming_enabled = settings.streaming.enabled;
 
-        if is_always_on {
-            // Always-on mode: Play audio feedback immediately
-            debug!("Always-on mode: Playing audio feedback immediately");
-            play_feedback_sound(app, SoundType::Start);
-            let recording_started = rm.try_start_recording(&binding_id);
-            debug!("Recording started: {}", recording_started);
-        } else {
-            // On-demand mode: Start recording first, then play audio feedback
-            debug!("On-demand mode: Starting recording first, then audio feedback");
-            let recording_start_time = Instant::now();
-            if rm.try_start_recording(&binding_id) {
-                debug!("Recording started in {:?}", recording_start_time.elapsed());
-                // Small delay to ensure microphone stream is active
+        debug!(
+            "Recording mode - always_on: {}, streaming: {}",
+            is_always_on, streaming_enabled
+        );
+
+        // Phase 2: Decide between streaming and batch mode
+        if streaming_enabled {
+            debug!("Starting streaming recording for binding: {}", binding_id);
+
+            // Create chunk queue
+            let (chunk_tx, chunk_rx) = create_bounded_queue(settings.streaming.max_queue_size);
+
+            // Start streaming recording
+            if let Err(e) = rm.start_streaming_recording(
+                &binding_id,
+                settings.streaming.chunk_duration_seconds * 1000,
+                settings.streaming.overlap_seconds * 1000,
+                chunk_tx,
+                settings.streaming.backpressure_policy,
+            ) {
+                error!("Failed to start streaming recording: {}", e);
+                return;
+            }
+
+            // Spawn workflow engine streaming execution
+            let workflow_engine = Arc::clone(&app.state::<Arc<crate::workflow::WorkflowEngine>>());
+            let app_clone = app.clone();
+            let binding_id_clone = binding_id.clone();
+
+            tauri::async_runtime::spawn(async move {
+                debug!("Streaming workflow task started for binding: {}", binding_id_clone);
+
+                match workflow_engine
+                    .execute_binding_streaming(&app_clone, &binding_id_clone, chunk_rx)
+                    .await
+                {
+                    Ok(_result) => {
+                        debug!("Streaming workflow completed successfully");
+                        // Cleanup UI on success
+                        utils::hide_recording_overlay(&app_clone);
+                        change_tray_icon(&app_clone, TrayIconState::Idle);
+                    }
+                    Err(e) => {
+                        error!("Streaming workflow failed: {}", e);
+                        // Cleanup UI even on error
+                        utils::hide_recording_overlay(&app_clone);
+                        change_tray_icon(&app_clone, TrayIconState::Idle);
+                    }
+                }
+            });
+
+            // Play audio feedback
+            if is_always_on {
+                play_feedback_sound(app, SoundType::Start);
+            } else {
                 let app_clone = app.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(100));
-                    debug!("Playing delayed audio feedback");
                     play_feedback_sound(&app_clone, SoundType::Start);
                 });
+            }
+        } else {
+            // Batch mode (existing behavior)
+            debug!("Starting batch recording for binding: {}", binding_id);
+
+            if is_always_on {
+                // Always-on mode: Play audio feedback immediately
+                debug!("Always-on mode: Playing audio feedback immediately");
+                play_feedback_sound(app, SoundType::Start);
+                let recording_started = rm.try_start_recording(&binding_id);
+                debug!("Recording started: {}", recording_started);
             } else {
-                debug!("Failed to start recording");
+                // On-demand mode: Start recording first, then play audio feedback
+                debug!("On-demand mode: Starting recording first, then audio feedback");
+                let recording_start_time = Instant::now();
+                if rm.try_start_recording(&binding_id) {
+                    debug!("Recording started in {:?}", recording_start_time.elapsed());
+                    // Small delay to ensure microphone stream is active
+                    let app_clone = app.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        debug!("Playing delayed audio feedback");
+                        play_feedback_sound(&app_clone, SoundType::Start);
+                    });
+                } else {
+                    debug!("Failed to start recording");
+                }
             }
         }
 
@@ -112,12 +179,32 @@ impl ShortcutAction for UnifiedTranscribeAction {
         // Play audio feedback for recording stop
         play_feedback_sound(app, SoundType::Stop);
 
-        // Get binding configuration to determine what to do with the transcription
+        // Get settings to determine mode
         let settings = get_settings(app);
         let binding_config = settings.bindings.get(binding_id).cloned();
+        let streaming_enabled = settings.streaming.enabled;
 
         let binding_id = binding_id.to_string();
 
+        // Phase 2: Check if this was a streaming recording
+        if streaming_enabled {
+            debug!("Stopping streaming recording for binding: {}", binding_id);
+
+            // Stop streaming recording (this flushes final chunk and closes queue)
+            if let Err(e) = rm.stop_streaming_recording(&binding_id) {
+                error!("Failed to stop streaming recording: {}", e);
+                utils::hide_recording_overlay(&ah);
+                change_tray_icon(&ah, TrayIconState::Idle);
+                return;
+            }
+
+            // The streaming workflow task spawned in start() will complete asynchronously
+            // and handle history save, destination routing, and UI cleanup.
+            debug!("Streaming recording stopped, workflow will complete asynchronously");
+            return;
+        }
+
+        // Batch mode (existing behavior)
         tauri::async_runtime::spawn(async move {
             let binding_id = binding_id.clone();
             debug!(

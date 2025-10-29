@@ -19,6 +19,8 @@ use crate::audio_toolkit::{
 enum Cmd {
     Start,
     Stop(mpsc::Sender<Vec<f32>>),
+    StartStreaming(mpsc::Sender<Vec<f32>>), // Streaming mode - sends samples as they're processed
+    StopStreaming,
     Shutdown,
 }
 
@@ -143,6 +145,25 @@ impl AudioRecorder {
         Ok(resp_rx.recv()?) // wait for the samples
     }
 
+    /// Start streaming mode - samples will be sent to the provided channel as they're processed
+    pub fn start_streaming(
+        &self,
+        sample_sender: mpsc::Sender<Vec<f32>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(tx) = &self.cmd_tx {
+            tx.send(Cmd::StartStreaming(sample_sender))?;
+        }
+        Ok(())
+    }
+
+    /// Stop streaming mode - no final samples are returned
+    pub fn stop_streaming(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(tx) = &self.cmd_tx {
+            tx.send(Cmd::StopStreaming)?;
+        }
+        Ok(())
+    }
+
     pub fn close(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(tx) = self.cmd_tx.take() {
             let _ = tx.send(Cmd::Shutdown);
@@ -237,6 +258,7 @@ fn run_consumer(
 
     let mut processed_samples = Vec::<f32>::new();
     let mut recording = false;
+    let mut streaming_tx: Option<mpsc::Sender<Vec<f32>>> = None;
 
     // ---------- spectrum visualisation setup ---------------------------- //
     const BUCKETS: usize = 16;
@@ -254,19 +276,33 @@ fn run_consumer(
         recording: bool,
         vad: &Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
         out_buf: &mut Vec<f32>,
+        streaming_tx: &Option<mpsc::Sender<Vec<f32>>>,
     ) {
         if !recording {
             return;
         }
 
-        if let Some(vad_arc) = vad {
+        let processed = if let Some(vad_arc) = vad {
             let mut det = vad_arc.lock().unwrap();
             match det.push_frame(samples).unwrap_or(VadFrame::Speech(samples)) {
-                VadFrame::Speech(buf) => out_buf.extend_from_slice(buf),
-                VadFrame::Noise => {}
+                VadFrame::Speech(buf) => Some(buf.to_vec()),
+                VadFrame::Noise => None,
             }
         } else {
-            out_buf.extend_from_slice(samples);
+            Some(samples.to_vec())
+        };
+
+        // If we have processed samples, handle them
+        if let Some(proc_samples) = processed {
+            // Send to streaming channel if active
+            if let Some(tx) = streaming_tx {
+                // Blocking send - we're in consumer thread, not CPAL thread, so this is safe
+                // If receiver is gone, channel will error and we just ignore it
+                let _ = tx.send(proc_samples.clone());
+            }
+
+            // Also accumulate for batch mode
+            out_buf.extend_from_slice(&proc_samples);
         }
     }
 
@@ -285,7 +321,7 @@ fn run_consumer(
 
         // ---------- existing pipeline ------------------------------------ //
         frame_resampler.push(&raw, &mut |frame: &[f32]| {
-            handle_frame(frame, recording, &vad, &mut processed_samples)
+            handle_frame(frame, recording, &vad, &mut processed_samples, &streaming_tx)
         });
 
         // non-blocking check for a command
@@ -304,10 +340,33 @@ fn run_consumer(
 
                     frame_resampler.finish(&mut |frame: &[f32]| {
                         // we still want to process the last few frames
-                        handle_frame(frame, true, &vad, &mut processed_samples)
+                        handle_frame(frame, true, &vad, &mut processed_samples, &streaming_tx)
                     });
 
                     let _ = reply_tx.send(std::mem::take(&mut processed_samples));
+                }
+                Cmd::StartStreaming(tx) => {
+                    processed_samples.clear();
+                    recording = true;
+                    streaming_tx = Some(tx);
+                    visualizer.reset();
+                    if let Some(v) = &vad {
+                        v.lock().unwrap().reset();
+                    }
+                }
+                Cmd::StopStreaming => {
+                    recording = false;
+
+                    // Flush any remaining frames through the resampler
+                    frame_resampler.finish(&mut |frame: &[f32]| {
+                        handle_frame(frame, true, &vad, &mut processed_samples, &streaming_tx)
+                    });
+
+                    // Close the streaming channel
+                    streaming_tx = None;
+
+                    // Clear accumulated samples (not returned in streaming mode)
+                    processed_samples.clear();
                 }
                 Cmd::Shutdown => return,
             }

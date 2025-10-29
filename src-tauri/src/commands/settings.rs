@@ -36,3 +36,14 @@ pub fn change_use_workflow_engine_setting(app: AppHandle, enabled: bool) -> Resu
     crate::settings::write_settings(&app, settings);
     Ok(())
 }
+
+#[tauri::command]
+pub fn change_streaming_settings(
+    app: AppHandle,
+    streaming: crate::settings::StreamingSettings,
+) -> Result<(), String> {
+    let mut settings = crate::settings::get_settings(&app);
+    settings.streaming = streaming;
+    crate::settings::write_settings(&app, settings);
+    Ok(())
+}

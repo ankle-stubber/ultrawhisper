@@ -8,8 +8,10 @@ use crate::model_pool::ModelPool;
 use crate::router::clipboard::ClipboardDestination;
 use crate::router::file::FileDestination;
 use crate::settings::get_settings;
+use crate::streaming::chunker::AudioChunk;
+use crate::streaming::session::StreamingSession;
 use anyhow::{anyhow, Result};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::env;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -204,6 +206,165 @@ impl WorkflowEngine {
         Ok(ExecutionResult {
             workflow_id: workflow.id,
             text,
+        })
+    }
+
+    /// Execute a binding/workflow with streaming audio chunks
+    ///
+    /// This is the Phase 2 streaming execution path. It:
+    /// 1. Loads the workflow configuration
+    /// 2. Ensures the model is loaded
+    /// 3. Processes audio chunks as they arrive
+    /// 4. Merges chunks using StreamingSession
+    /// 5. Saves final transcript to history (if non-empty)
+    /// 6. Routes output to destinations
+    ///
+    /// # Arguments
+    /// * `app` - Tauri app handle
+    /// * `binding_id` - The binding ID to execute
+    /// * `chunk_receiver` - Channel receiving audio chunks during recording
+    pub async fn execute_binding_streaming(
+        &self,
+        app: &AppHandle,
+        binding_id: &str,
+        mut chunk_receiver: tokio::sync::mpsc::Receiver<AudioChunk>,
+    ) -> Result<ExecutionResult> {
+        info!("Executing streaming workflow for binding: {}", binding_id);
+
+        // 1. Load workflow configuration
+        let workflow = self.get_workflow_for_binding(app, binding_id)?;
+        debug!("Streaming workflow loaded: {}", workflow.name);
+
+        // 2. Initialize streaming session
+        let mut session = StreamingSession::new();
+        debug!(
+            "Streaming session initialized: {}",
+            session.session_id()
+        );
+
+        // 3. Process chunks as they arrive
+        let mut chunks_processed = 0;
+        while let Some(chunk) = chunk_receiver.recv().await {
+            debug!(
+                "Processing chunk {} ({} samples, final: {})",
+                chunks_processed + 1,
+                chunk.audio.len(),
+                chunk.is_final
+            );
+
+            // Ensure model is loaded (handles mid-stream unloads)
+            debug!("Loading model for chunk {}: {}", chunks_processed + 1, workflow.model_config.model_id);
+            let model_handle = match self
+                .model_pool
+                .get_or_load(&workflow.model_config.model_id)
+                .await
+            {
+                Ok(handle) => handle,
+                Err(e) => {
+                    error!("Failed to load model for chunk {}: {}", chunks_processed + 1, e);
+                    continue; // Skip this chunk and try the next one
+                }
+            };
+
+            // Transcribe chunk
+            match model_handle.transcribe(chunk.audio.clone()).await {
+                Ok(chunk_text) => {
+                    debug!(
+                        "Chunk {} transcribed: {} chars",
+                        chunks_processed + 1,
+                        chunk_text.len()
+                    );
+
+                    // Calculate audio duration. Net-new duration subtracts the overlap from subsequent chunks.
+                    let total_chunk_secs = chunk.audio.len() as f32 / 16000.0;
+                    let overlap_secs = chunk.overlap_samples as f32 / 16000.0;
+                    let audio_duration_secs = if chunks_processed == 0 {
+                        total_chunk_secs
+                    } else {
+                        (total_chunk_secs - overlap_secs).max(0.0)
+                    };
+
+                    // Merge with accumulated transcript
+                    let _current_transcript = session.merge_chunk(&chunk_text, audio_duration_secs);
+
+                    chunks_processed += 1;
+
+                    // TODO Phase 3: Emit streaming-progress event
+                    // app.emit_all("streaming-progress", &session.progress())?;
+                }
+                Err(e) => {
+                    error!("Failed to transcribe chunk {}: {}", chunks_processed + 1, e);
+                    // Continue processing remaining chunks despite error
+                    warn!("Continuing with remaining chunks despite transcription error");
+                }
+            }
+        }
+
+        debug!(
+            "All chunks processed ({} total), finalizing session",
+            chunks_processed
+        );
+
+        // 5. Finalize session and get complete transcript
+        let final_transcript = session.finalize();
+
+        info!(
+            "Streaming transcription complete: {} characters, {} chunks",
+            final_transcript.len(),
+            chunks_processed
+        );
+
+        // 6. Phase 1 parity: if transcription is empty, skip history and destinations
+        if final_transcript.trim().is_empty() {
+            debug!("Empty transcription; skipping history save and destination routing");
+        } else {
+            // Save to history with workflow tracking
+            // Note: We don't have the original audio samples in streaming mode,
+            // so we pass an empty vector
+            let hm = app.state::<Arc<HistoryManager>>();
+            hm.save_transcription(
+                vec![], // No audio samples in streaming mode
+                final_transcript.clone(),
+                Some(&workflow.id),
+                Some(&workflow.name),
+            )
+            .await
+            .map_err(|e| {
+                error!("Failed to save to history: {}", e);
+                anyhow!("History save failed: {}", e)
+            })?;
+
+            debug!("Saved to history with workflow_id: {}", workflow.id);
+
+            // 7. Route to destinations
+            let router = self.build_router(&workflow)?;
+            let ctx = DestinationContext {
+                app,
+                output_base: workflow.audio_processing.save_path.clone(),
+                audio_path: None, // No audio file in streaming mode
+            };
+            let metadata = self.build_metadata(&workflow);
+
+            let results = router.route(&ctx, &final_transcript, &metadata).await?;
+
+            // Log destination results (but don't fail the overall operation)
+            for (idx, result) in results.iter().enumerate() {
+                match result {
+                    DestinationResult::Success => {
+                        debug!("Destination {} succeeded", idx + 1);
+                    }
+                    DestinationResult::Failed(err) => {
+                        error!("Destination {} failed: {}", idx + 1, err);
+                    }
+                }
+            }
+        }
+
+        info!("Streaming workflow execution complete for: {}", workflow.id);
+
+        Ok(ExecutionResult {
+            workflow_id: workflow.id,
+            text: final_transcript,
         })
     }
 }

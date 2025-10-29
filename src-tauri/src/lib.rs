@@ -294,6 +294,7 @@ pub fn run() {
             commands::history::update_history_limit,
             commands::settings::pick_directory,
             commands::settings::change_use_workflow_engine_setting,
+            commands::settings::change_streaming_settings,
             commands::batch::process_batch_now,
             commands::batch::get_batch_settings,
             commands::batch::update_batch_settings,

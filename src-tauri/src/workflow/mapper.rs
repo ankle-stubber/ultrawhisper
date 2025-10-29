@@ -128,6 +128,7 @@ mod tests {
             clipboard_handling: crate::settings::ClipboardHandling::DontModify,
             batch_transcription: crate::settings::BatchTranscriptionSettings::default(),
             use_workflow_engine: false,
+            streaming: crate::settings::StreamingSettings::default(),
         }
     }
 
