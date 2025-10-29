@@ -2,11 +2,12 @@
 
 use super::destinations::{DestinationContext, DestinationResult, DestinationRouter, Metadata};
 use super::mapper::binding_to_workflow;
-use super::types::{DestinationConfig, Workflow};
+use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
 use crate::router::clipboard::ClipboardDestination;
 use crate::router::file::FileDestination;
+use crate::destinations::{DestinationConfig, DestinationStorage};
 use crate::settings::get_settings;
 use crate::streaming::chunker::AudioChunk;
 use crate::streaming::session::StreamingSession;
@@ -59,7 +60,7 @@ impl WorkflowEngine {
         debug!(
             "Workflow loaded: {} with {} destination(s)",
             workflow.name,
-            workflow.destinations.len()
+            workflow.destination_ids.len()
         );
 
         Ok(workflow)
@@ -67,28 +68,43 @@ impl WorkflowEngine {
 
     /// Build a destination router from a workflow's destination configs
     ///
+    /// NOTE (Bundle 2): This is temporarily simplified during the transition
+    /// to destination entities. Bundle 3 will implement full destination lookup
+    /// and instantiation from the destination storage.
+    ///
     /// This method instantiates the appropriate destination implementations
     /// (Clipboard, File, etc.) based on the workflow configuration.
-    pub fn build_router(&self, workflow: &Workflow) -> Result<DestinationRouter> {
+    #[allow(unused_variables)]
+    pub fn build_router(&self, app: &AppHandle, workflow: &Workflow) -> Result<DestinationRouter> {
         let mut router = DestinationRouter::new();
 
-        for dest_config in &workflow.destinations {
-            match dest_config {
-                DestinationConfig::Clipboard { paste_immediately } => {
-                    debug!("Adding clipboard destination (paste: {})", paste_immediately);
-                    router.add_destination(Box::new(ClipboardDestination::new(*paste_immediately)));
+        // Look up destinations by ID from DestinationStorage and instantiate implementations
+        let storage_state = app.state::<DestinationStorage>();
+        for dest_id in &workflow.destination_ids {
+            match storage_state.get(dest_id) {
+                Ok(Some(dest)) => {
+                    match dest.config {
+                        DestinationConfig::ActiveWindow { .. } => {
+                            // Minimal: always paste immediately
+                            router.add_destination(Box::new(ClipboardDestination::new(true)));
+                            debug!("Added ActiveWindow destination: {}", dest_id);
+                        }
+                        DestinationConfig::FileSystem { ref path, .. } => {
+                            let expanded = expand_tilde_str(path);
+                            router.add_destination(Box::new(FileDestination::new(Some(expanded))));
+                            debug!("Added FileSystem destination: {} -> {}", dest_id, path);
+                        }
+                        DestinationConfig::Telegram { .. } => {
+                            // Telegram not implemented in Bundle 2
+                            debug!("Skipping Telegram destination '{}' (not implemented yet)", dest_id);
+                        }
+                    }
                 }
-                DestinationConfig::File { path, .. } => {
-                    debug!("Adding file destination (path: {:?})", path);
-                    // Convert PathBuf to String for FileDestination
-                    // Expand tilde if present (matching batch semantics; support HOME and USERPROFILE)
-                    let path_str = path.to_string_lossy();
-                    let expanded_path = expand_tilde_str(&path_str);
-                    router.add_destination(Box::new(FileDestination::new(Some(expanded_path))));
+                Ok(None) => {
+                    warn!("Destination ID '{}' not found in storage", dest_id);
                 }
-                DestinationConfig::Telegram { .. } | DestinationConfig::Webhook { .. } => {
-                    // Phase 1: External destinations not yet implemented
-                    debug!("Skipping external destination (Phase 4 feature)");
+                Err(e) => {
+                    warn!("Failed to load destination '{}': {}", dest_id, e);
                 }
             }
         }
@@ -178,7 +194,7 @@ impl WorkflowEngine {
             debug!("Saved to history with workflow_id: {}", workflow.id);
 
             // 5. Route to destinations
-            let router = self.build_router(&workflow)?;
+            let router = self.build_router(app, &workflow)?;
             let ctx = DestinationContext {
                 app,
                 output_base: workflow.audio_processing.save_path.clone(),
@@ -414,7 +430,7 @@ impl WorkflowEngine {
             debug!("Saved to history with workflow_id: {}", workflow.id);
 
             // 8. Route to destinations
-            let router = self.build_router(&workflow)?;
+            let router = self.build_router(app, &workflow)?;
             let ctx = DestinationContext {
                 app,
                 output_base: workflow.audio_processing.save_path.clone(),
