@@ -133,26 +133,31 @@ impl ShortcutAction for UnifiedTranscribeAction {
                     samples.len()
                 );
 
-                // PHASE 0 INTEGRATION POINT: Feature flag seam for workflow engine
-                // If the workflow engine is enabled, call it (but Phase 0 still falls through to legacy)
+                // PHASE 1: Workflow engine path with short-circuit on success, fallback on error
                 if settings.use_workflow_engine {
                     let workflow_engine = Arc::clone(&ah.state::<Arc<crate::workflow::WorkflowEngine>>());
                     let binding_id_clone = binding_id.clone();
                     let samples_for_engine = samples.clone();
                     let ah_clone = ah.clone();
 
-                    tauri::async_runtime::spawn(async move {
-                        match workflow_engine.execute_binding(&ah_clone, &binding_id_clone, samples_for_engine).await {
-                            Ok(result) => {
-                                debug!("Workflow engine executed for binding: {}, result: {:?}", result.workflow_id, result.text);
-                            }
-                            Err(e) => {
-                                error!("Workflow engine execution failed: {}", e);
-                            }
+                    debug!("Attempting workflow engine path for binding: {}", binding_id_clone);
+
+                    match workflow_engine.execute_binding(&ah_clone, &binding_id_clone, samples_for_engine).await {
+                        Ok(_result) => {
+                            debug!("Workflow engine succeeded, short-circuiting legacy path");
+                            // Success: short-circuit the legacy path
+                            // Still need to do UI cleanup (overlay/tray)
+                            utils::hide_recording_overlay(&ah_clone);
+                            change_tray_icon(&ah_clone, TrayIconState::Idle);
+                            return; // Exit the async task - legacy path will not run
                         }
-                    });
+                        Err(e) => {
+                            error!("Workflow engine failed: {}. Falling back to legacy path.", e);
+                            // Fall through to legacy path below
+                        }
+                    }
                 }
-                // End of workflow engine seam - fall through to legacy transcription
+                // If workflow engine is disabled or failed, continue with legacy transcription
 
                 let transcription_time = Instant::now();
                 let samples_clone = samples.clone();
