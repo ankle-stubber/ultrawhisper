@@ -306,7 +306,7 @@ impl WorkflowEngine {
         );
 
         // 5. Finalize session and get complete transcript
-        let final_transcript = session.finalize();
+        let mut final_transcript = session.finalize();
 
         info!(
             "Streaming transcription complete: {} characters, {} chunks",
@@ -314,7 +314,47 @@ impl WorkflowEngine {
             chunks_processed
         );
 
-        // 6. Phase 1 parity: if transcription is empty, skip history and destinations
+        // 6. Backfill: Attempt to transcribe the saved WAV file for better quality
+        // TODO(PR5): Gate this with settings.streaming.enable_backfill
+        // For now, always attempt backfill if a WAV file was saved
+        let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
+        if let Some(file_name) = audio_manager.get_last_streaming_file_name() {
+            debug!(
+                "Attempting whole-file backfill from saved audio: {}",
+                file_name
+            );
+
+            // Get transcription manager from model pool
+            let tm_state = app.state::<Arc<crate::managers::transcription::TranscriptionManager>>();
+
+            match crate::streaming::backfill::backfill_whole_file(
+                app,
+                &file_name,
+                tm_state.inner().clone(),
+            )
+            .await
+            {
+                Ok(backfilled_text) => {
+                    info!(
+                        "Backfill successful: {} characters (was {} from live chunks)",
+                        backfilled_text.len(),
+                        final_transcript.len()
+                    );
+                    final_transcript = backfilled_text;
+                }
+                Err(e) => {
+                    warn!(
+                        "Backfill failed for {}: {}. Using live transcript.",
+                        file_name, e
+                    );
+                    // Keep the live merged transcript (final_transcript remains unchanged)
+                }
+            }
+        } else {
+            debug!("No saved audio file available for backfill, using live transcript");
+        }
+
+        // 7. Phase 1 parity: if transcription is empty, skip history and destinations
         if final_transcript.trim().is_empty() {
             debug!("Empty transcription; skipping history save and destination routing");
         } else {
@@ -336,7 +376,7 @@ impl WorkflowEngine {
 
             debug!("Saved to history with workflow_id: {}", workflow.id);
 
-            // 7. Route to destinations
+            // 8. Route to destinations
             let router = self.build_router(&workflow)?;
             let ctx = DestinationContext {
                 app,
