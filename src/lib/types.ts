@@ -58,6 +58,19 @@ export const BatchTranscriptionSettingsSchema = z.object({
 });
 export type BatchTranscriptionSettings = z.infer<typeof BatchTranscriptionSettingsSchema>;
 
+export const BackpressurePolicySchema = z.enum(["Block", "DropNewest", "Coalesce"]);
+export type BackpressurePolicy = z.infer<typeof BackpressurePolicySchema>;
+
+export const StreamingSettingsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  auto_enable_threshold_seconds: z.number().optional().default(300),
+  chunk_duration_seconds: z.number().optional().default(20),
+  overlap_seconds: z.number().optional().default(2),
+  max_queue_size: z.number().optional().default(10),
+  backpressure_policy: BackpressurePolicySchema.optional().default("Block"),
+});
+export type StreamingSettings = z.infer<typeof StreamingSettingsSchema>;
+
 export const SettingsSchema = z.object({
   bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
@@ -95,6 +108,14 @@ export const SettingsSchema = z.object({
     max_file_size_mb: 500,
   }),
   use_workflow_engine: z.boolean().optional().default(false),
+  streaming: StreamingSettingsSchema.optional().default({
+    enabled: false,
+    auto_enable_threshold_seconds: 300,
+    chunk_duration_seconds: 20,
+    overlap_seconds: 2,
+    max_queue_size: 10,
+    backpressure_policy: "Block",
+  }),
 });
 
 export const BindingResponseSchema = z.object({

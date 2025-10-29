@@ -109,6 +109,8 @@ const settingUpdaters: {
   history_limit: (value) => invoke("update_history_limit", { limit: value }),
   use_workflow_engine: (value) =>
     invoke("change_use_workflow_engine_setting", { enabled: value }),
+  streaming: (value) =>
+    invoke("change_streaming_settings", { streaming: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -142,6 +144,18 @@ export const useSettingsStore = create<SettingsStore>()(
         const store = await load("settings_store.json", { autoSave: false });
         const settings = (await store.get("settings")) as Settings;
 
+        // One-time normalize legacy values from older versions
+        // BackpressurePolicy: "DropOldest" -> "DropNewest"
+        let normalizedStreaming = settings?.streaming;
+        let didNormalize = false;
+        if (normalizedStreaming && (normalizedStreaming as any).backpressure_policy === "DropOldest") {
+          normalizedStreaming = {
+            ...normalizedStreaming,
+            backpressure_policy: "Block" as any,
+          } as Settings["streaming"];
+          didNormalize = true;
+        }
+
         // Load additional settings that come from invoke calls
         const [microphoneMode, selectedMicrophone, selectedOutputDevice] =
           await Promise.allSettled([
@@ -153,6 +167,7 @@ export const useSettingsStore = create<SettingsStore>()(
         // Merge all settings
         const mergedSettings: Settings = {
           ...settings,
+          ...(normalizedStreaming ? { streaming: normalizedStreaming } : {}),
           always_on_microphone:
             microphoneMode.status === "fulfilled"
               ? (microphoneMode.value as boolean)
@@ -168,6 +183,15 @@ export const useSettingsStore = create<SettingsStore>()(
         };
 
         set({ settings: mergedSettings, isLoading: false });
+
+        // Persist normalization back to the store (best-effort)
+        if (didNormalize && normalizedStreaming) {
+          try {
+            await invoke("change_streaming_settings", { streaming: normalizedStreaming });
+          } catch (e) {
+            console.warn("Failed to persist normalized streaming settings:", e);
+          }
+        }
       } catch (error) {
         console.error("Failed to load settings:", error);
         set({ isLoading: false });

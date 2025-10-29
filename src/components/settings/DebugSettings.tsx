@@ -8,12 +8,14 @@ import { ClipboardHandlingSetting } from "./ClipboardHandling";
 import { AlwaysOnMicrophone } from "./AlwaysOnMicrophone";
 import { SoundPicker } from "./SoundPicker";
 import { UseWorkflowEngine } from "./UseWorkflowEngine";
+import { StreamingSettings } from "./StreamingSettings";
 
 export const DebugSettings: React.FC = () => {
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title="Debug">
         <UseWorkflowEngine descriptionMode="tooltip" grouped={true} />
+        <StreamingSettings descriptionMode="tooltip" grouped={true} />
         <PasteMethodSetting descriptionMode="tooltip" grouped={true} />
         <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} />
         <SoundPicker

@@ -1,7 +1,9 @@
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::settings::get_settings;
+use crate::streaming::chunker::{AudioChunk, AudioChunker};
+use crate::streaming::queue::{try_send_with_policy, BackpressurePolicy};
 use crate::utils;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
@@ -13,7 +15,10 @@ const WHISPER_SAMPLE_RATE: usize = 16000;
 #[derive(Clone, Debug)]
 pub enum RecordingState {
     Idle,
-    Recording { binding_id: String },
+    Recording {
+        binding_id: String,
+        is_streaming: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -210,6 +215,7 @@ impl AudioRecordingManager {
                     *self.is_recording.lock().unwrap() = true;
                     *state = RecordingState::Recording {
                         binding_id: binding_id.to_string(),
+                        is_streaming: false,
                     };
                     debug!("Recording started for binding {binding_id}");
                     return true;
@@ -234,10 +240,11 @@ impl AudioRecordingManager {
     pub fn stop_recording(&self, binding_id: &str) -> Option<Vec<f32>> {
         let mut state = self.state.lock().unwrap();
 
-        match *state {
+        match &*state {
             RecordingState::Recording {
                 binding_id: ref active,
-            } if active == binding_id => {
+                is_streaming,
+            } if active == binding_id && !is_streaming => {
                 *state = RecordingState::Idle;
                 drop(state);
 
@@ -280,7 +287,7 @@ impl AudioRecordingManager {
     pub fn cancel_recording(&self) {
         let mut state = self.state.lock().unwrap();
 
-        if let RecordingState::Recording { .. } = *state {
+        if matches!(*state, RecordingState::Recording { .. }) {
             *state = RecordingState::Idle;
             drop(state);
 
@@ -294,6 +301,144 @@ impl AudioRecordingManager {
             if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
                 self.stop_microphone_stream();
             }
+        }
+    }
+
+    /// Start streaming recording - samples are chunked and sent to the provided channel
+    ///
+    /// This method is for Phase 2 streaming transcription. It:
+    /// 1. Starts recording with AudioRecorder in streaming mode
+    /// 2. Creates a consumer task that chunks samples
+    /// 3. Sends chunks to the provided tokio channel
+    ///
+    /// # Arguments
+    /// * `binding_id` - The binding ID for this recording
+    /// * `chunk_duration_ms` - Duration of each chunk in milliseconds
+    /// * `overlap_duration_ms` - Overlap duration in milliseconds
+    /// * `chunk_sender` - Tokio channel to send audio chunks to
+    /// * `backpressure_policy` - Policy for handling full queue
+    pub fn start_streaming_recording(
+        &self,
+        binding_id: &str,
+        chunk_duration_ms: u32,
+        overlap_duration_ms: u32,
+        chunk_sender: tokio::sync::mpsc::Sender<AudioChunk>,
+        backpressure_policy: BackpressurePolicy,
+    ) -> Result<(), anyhow::Error> {
+        let mut state = self.state.lock().unwrap();
+
+        if !matches!(*state, RecordingState::Idle) {
+            return Err(anyhow::anyhow!("Already recording"));
+        }
+
+        // Ensure microphone is open in on-demand mode
+        if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
+            drop(state);
+            self.start_microphone_stream()?;
+            state = self.state.lock().unwrap();
+        }
+
+        // Create std::sync::mpsc channel for AudioRecorder to send samples
+        let (sample_tx, sample_rx) = std::sync::mpsc::channel::<Vec<f32>>();
+
+        // Start AudioRecorder in streaming mode
+        if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+            rec.start_streaming(sample_tx)
+                .map_err(|e| anyhow::anyhow!("Failed to start streaming: {}", e))?;
+
+            *self.is_recording.lock().unwrap() = true;
+            *state = RecordingState::Recording {
+                binding_id: binding_id.to_string(),
+                is_streaming: true,
+            };
+
+            debug!(
+                "Streaming recording started for binding {} (chunk: {}ms, overlap: {}ms)",
+                binding_id, chunk_duration_ms, overlap_duration_ms
+            );
+
+            // Spawn consumer task for chunking (runs in background, not on CPAL thread)
+            tauri::async_runtime::spawn(async move {
+                let mut chunker = AudioChunker::new(
+                    chunk_duration_ms,
+                    overlap_duration_ms,
+                    WHISPER_SAMPLE_RATE as u32,
+                );
+
+                debug!("Chunker initialized, starting to process samples");
+
+                // Process samples as they arrive
+                while let Ok(samples) = sample_rx.recv() {
+                    if let Some(chunk) = chunker.add_samples(&samples) {
+                        // Try to send chunk with backpressure policy
+                        let result = try_send_with_policy(&chunk_sender, chunk.clone(), backpressure_policy);
+
+                        match result {
+                            crate::streaming::queue::SendResult::Sent => {
+                                // Success - chunk queued
+                            }
+                            crate::streaming::queue::SendResult::DroppedNewest => {
+                                warn!(
+                                    "Chunk queue full, dropped newest chunk (policy: {:?})",
+                                    backpressure_policy
+                                );
+                            }
+                            crate::streaming::queue::SendResult::WouldBlock => {
+                                // Block policy - try blocking send
+                                if chunk_sender.send(chunk).await.is_err() {
+                                    warn!("Failed to send chunk - receiver closed");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                debug!("Sample stream closed, flushing remaining audio");
+
+                // Flush remaining samples when channel closes
+                if let Some(final_chunk) = chunker.flush_remaining() {
+                    let _ = chunk_sender.send(final_chunk).await;
+                    debug!("Final chunk flushed");
+                }
+
+                debug!("Streaming consumer task completed");
+            });
+
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Recorder not available"))
+        }
+    }
+
+    /// Stop streaming recording - no samples are returned
+    pub fn stop_streaming_recording(&self, binding_id: &str) -> Result<(), anyhow::Error> {
+        let mut state = self.state.lock().unwrap();
+
+        match &*state {
+            RecordingState::Recording {
+                binding_id: ref active,
+                is_streaming,
+            } if active == binding_id && *is_streaming => {
+                *state = RecordingState::Idle;
+                drop(state);
+
+                if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+                    rec.stop_streaming()
+                        .map_err(|e| anyhow::anyhow!("Failed to stop streaming: {}", e))?;
+                }
+
+                *self.is_recording.lock().unwrap() = false;
+
+                // In on-demand mode turn the mic off again
+                if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
+                    self.stop_microphone_stream();
+                }
+
+                debug!("Streaming recording stopped for binding {}", binding_id);
+                Ok(())
+            }
+            _ => Err(anyhow::anyhow!("Not recording or binding mismatch")),
         }
     }
 }

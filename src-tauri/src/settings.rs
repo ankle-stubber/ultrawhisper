@@ -1,3 +1,4 @@
+use crate::streaming::queue::BackpressurePolicy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::AppHandle;
@@ -204,6 +205,61 @@ fn default_template_id() -> String {
     "default_markdown".to_string()
 }
 
+/// Streaming transcription settings for Phase 2
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StreamingSettings {
+    /// Master switch - enable/disable streaming globally
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Auto-enable streaming for recordings longer than N seconds (0 = disabled)
+    #[serde(default = "default_auto_enable_threshold_seconds")]
+    pub auto_enable_threshold_seconds: u32,
+
+    /// Duration of each chunk in seconds
+    #[serde(default = "default_chunk_duration_seconds")]
+    pub chunk_duration_seconds: u32,
+
+    /// Overlap between chunks in seconds
+    #[serde(default = "default_overlap_seconds")]
+    pub overlap_seconds: u32,
+
+    /// Maximum number of chunks that can be queued
+    #[serde(default = "default_max_queue_size")]
+    pub max_queue_size: usize,
+
+    /// Policy for handling backpressure when queue is full
+    #[serde(default)]
+    pub backpressure_policy: BackpressurePolicy,
+}
+
+impl Default for StreamingSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auto_enable_threshold_seconds: default_auto_enable_threshold_seconds(),
+            chunk_duration_seconds: default_chunk_duration_seconds(),
+            overlap_seconds: default_overlap_seconds(),
+            max_queue_size: default_max_queue_size(),
+            backpressure_policy: BackpressurePolicy::Block,
+        }
+    }
+}
+
+fn default_auto_enable_threshold_seconds() -> u32 {
+    300 // 5 minutes - disabled by default when streaming is off
+}
+
+fn default_chunk_duration_seconds() -> u32 {
+    20 // 20 seconds per chunk
+}
+
+fn default_overlap_seconds() -> u32 {
+    2 // 2 seconds overlap
+}
+
+fn default_max_queue_size() -> usize { 10 }
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -250,6 +306,8 @@ pub struct AppSettings {
     pub batch_transcription: BatchTranscriptionSettings,
     #[serde(default)]
     pub use_workflow_engine: bool,
+    #[serde(default)]
+    pub streaming: StreamingSettings,
 }
 
 fn default_model() -> String {
@@ -377,6 +435,7 @@ pub fn get_default_settings() -> AppSettings {
         clipboard_handling: ClipboardHandling::default(),
         batch_transcription: BatchTranscriptionSettings::default(),
         use_workflow_engine: false,
+        streaming: StreamingSettings::default(),
     }
 }
 
