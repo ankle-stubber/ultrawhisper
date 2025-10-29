@@ -172,6 +172,7 @@ mod tests {
         let chunk4 = AudioChunk {
             audio: vec![4.0; 1000],
             is_final: false,
+            overlap_samples: 0,
         };
         tx.try_send(chunk4).unwrap();
     }
@@ -184,10 +185,12 @@ mod tests {
         let chunk1 = AudioChunk {
             audio: vec![1.0; 1000],
             is_final: false,
+            overlap_samples: 0,
         };
         let chunk2 = AudioChunk {
             audio: vec![2.0; 1000],
             is_final: false,
+            overlap_samples: 0,
         };
 
         tx.send(chunk1).await.unwrap();
@@ -197,6 +200,7 @@ mod tests {
         let chunk3 = AudioChunk {
             audio: vec![3.0; 1000],
             is_final: false,
+            overlap_samples: 0,
         };
 
         let result = try_send_with_policy(&tx, chunk3, BackpressurePolicy::DropNewest);
@@ -249,6 +253,7 @@ mod tests {
         let chunk = AudioChunk {
             audio: vec![1.0; 1000],
             is_final: false,
+            overlap_samples: 0,
         };
 
         let result = try_send_with_policy(&tx, chunk, BackpressurePolicy::DropNewest);
