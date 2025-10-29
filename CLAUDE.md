@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Guide
+
+For navigating project documentation:
+- **Active Documentation:** See `docs_internal/README.md` for the canonical index and onboarding
+- **Vision & Architecture:** `docs_internal/plans/VISION_AND_ARCHITECTURE.md` (AUTHORITATIVE)
+- **Current Work:** `docs_internal/plans/REMAINING_WORK_ROADMAP.md`
+- **Quick Start:** `docs_internal/plans/IMMEDIATE_NEXT_STEPS.md`
+
 ## Development Commands
 
 **Prerequisites:**
