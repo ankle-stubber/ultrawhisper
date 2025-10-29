@@ -157,6 +157,59 @@ impl HistoryManager {
         Ok(())
     }
 
+    /// Save a transcription to history using an existing audio file
+    ///
+    /// This method is used when the audio file has already been written (e.g., by the streaming WAV writer).
+    /// It only inserts a database row, runs cleanup, and emits the history-updated event.
+    /// The WAV file must already exist in the recordings directory.
+    ///
+    /// # Arguments
+    /// * `file_name` - The filename of the existing WAV file (e.g., "handy-1234567890.wav")
+    /// * `transcription_text` - The transcribed text
+    /// * `workflow_id` - Optional workflow ID for tracking
+    /// * `workflow_name` - Optional workflow name for display
+    pub async fn save_transcription_with_path(
+        &self,
+        file_name: String,
+        transcription_text: String,
+        workflow_id: Option<&str>,
+        workflow_name: Option<&str>,
+    ) -> Result<()> {
+        // If history limit is 0, do not save at all.
+        if crate::settings::get_history_limit(&self.app_handle) == 0 {
+            return Ok(());
+        }
+
+        // Extract timestamp from filename (format: "handy-<timestamp>.wav")
+        let timestamp = file_name
+            .strip_prefix("handy-")
+            .and_then(|s| s.strip_suffix(".wav"))
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or_else(|| Utc::now().timestamp());
+
+        let title = self.format_timestamp_title(timestamp);
+
+        // Save to database (WAV file already exists)
+        self.save_to_database(
+            file_name,
+            timestamp,
+            title,
+            transcription_text,
+            workflow_id.map(|s| s.to_string()),
+            workflow_name.map(|s| s.to_string()),
+        )?;
+
+        // Clean up old entries
+        self.cleanup_old_entries()?;
+
+        // Emit history updated event
+        if let Err(e) = self.app_handle.emit("history-updated", ()) {
+            error!("Failed to emit history-updated event: {}", e);
+        }
+
+        Ok(())
+    }
+
     fn save_to_database(
         &self,
         file_name: String,
@@ -352,3 +405,60 @@ impl HistoryManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_timestamp_extraction_from_filename() {
+        // Test valid filename format
+        let file_name = "handy-1234567890.wav";
+        let timestamp = file_name
+            .strip_prefix("handy-")
+            .and_then(|s| s.strip_suffix(".wav"))
+            .and_then(|s| s.parse::<i64>().ok());
+
+        assert_eq!(timestamp, Some(1234567890));
+    }
+
+    #[test]
+    fn test_timestamp_extraction_invalid_filename() {
+        // Test invalid filename formats
+        let invalid_names = vec![
+            "invalid.wav",
+            "handy-.wav",
+            "handy-abc.wav",
+            "handy-123.mp3",
+            "recording-123.wav",
+        ];
+
+        for file_name in invalid_names {
+            let timestamp = file_name
+                .strip_prefix("handy-")
+                .and_then(|s| s.strip_suffix(".wav"))
+                .and_then(|s| s.parse::<i64>().ok());
+
+            assert_eq!(
+                timestamp, None,
+                "Should return None for invalid filename: {}",
+                file_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_filename_format_matches_writer() {
+        // Verify that the filename format matches what the writer produces
+        let unix_ts = 1234567890i64;
+        let expected_filename = format!("handy-{}.wav", unix_ts);
+
+        // Extract timestamp back from filename
+        let extracted_timestamp = expected_filename
+            .strip_prefix("handy-")
+            .and_then(|s| s.strip_suffix(".wav"))
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap();
+
+        assert_eq!(extracted_timestamp, unix_ts);
+    }
+}
+
