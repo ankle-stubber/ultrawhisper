@@ -5,9 +5,7 @@ use super::mapper::binding_to_workflow;
 use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
-use crate::router::clipboard::ClipboardDestination;
-use crate::router::file::FileDestination;
-use crate::destinations::{DestinationConfig, DestinationStorage};
+use crate::destinations::{ActiveWindowDestination, FileSystemDestination, DestinationConfig, DestinationStorage};
 use crate::settings::get_settings;
 use crate::streaming::chunker::AudioChunk;
 use crate::streaming::session::StreamingSession;
@@ -68,13 +66,11 @@ impl WorkflowEngine {
 
     /// Build a destination router from a workflow's destination configs
     ///
-    /// NOTE (Bundle 2): This is temporarily simplified during the transition
-    /// to destination entities. Bundle 3 will implement full destination lookup
-    /// and instantiation from the destination storage.
+    /// Bundle 3: Full destination lookup and instantiation with template support.
     ///
-    /// This method instantiates the appropriate destination implementations
-    /// (Clipboard, File, etc.) based on the workflow configuration.
-    #[allow(unused_variables)]
+    /// This method looks up destination entities by ID from DestinationStorage
+    /// and instantiates the appropriate destination adapter implementations
+    /// (ActiveWindow, FileSystem, etc.) with their configured templates.
     pub fn build_router(&self, app: &AppHandle, workflow: &Workflow) -> Result<DestinationRouter> {
         let mut router = DestinationRouter::new();
 
@@ -83,20 +79,35 @@ impl WorkflowEngine {
         for dest_id in &workflow.destination_ids {
             match storage_state.get(dest_id) {
                 Ok(Some(dest)) => {
+                    let template = dest.get_template().to_string();
+
                     match dest.config {
-                        DestinationConfig::ActiveWindow { .. } => {
-                            // Minimal: always paste immediately
-                            router.add_destination(Box::new(ClipboardDestination::new(true)));
-                            debug!("Added ActiveWindow destination: {}", dest_id);
+                        DestinationConfig::ActiveWindow { ref paste_method, preserve_clipboard } => {
+                            // Bundle 3: Use ActiveWindowDestination with template support
+                            let adapter = ActiveWindowDestination::new(
+                                template,
+                                paste_method.clone(),
+                                preserve_clipboard,
+                            );
+                            router.add_destination(Box::new(adapter));
+                            debug!("Added ActiveWindow destination: {} (paste_method: {}, preserve_clipboard: {})",
+                                   dest_id, paste_method, preserve_clipboard);
                         }
-                        DestinationConfig::FileSystem { ref path, .. } => {
-                            let expanded = expand_tilde_str(path);
-                            router.add_destination(Box::new(FileDestination::new(Some(expanded))));
-                            debug!("Added FileSystem destination: {} -> {}", dest_id, path);
+                        DestinationConfig::FileSystem { ref path, ref extension, ref filename_pattern } => {
+                            // Bundle 3: Use FileSystemDestination with template support
+                            let adapter = FileSystemDestination::new(
+                                template,
+                                path.clone(),
+                                extension.clone(),
+                                filename_pattern.clone(),
+                            );
+                            router.add_destination(Box::new(adapter));
+                            debug!("Added FileSystem destination: {} -> {} (pattern: {})",
+                                   dest_id, path, filename_pattern);
                         }
                         DestinationConfig::Telegram { .. } => {
-                            // Telegram not implemented in Bundle 2
-                            debug!("Skipping Telegram destination '{}' (not implemented yet)", dest_id);
+                            // Telegram not implemented in Bundle 3
+                            debug!("Skipping Telegram destination '{}' (will be implemented in Bundle 4)", dest_id);
                         }
                     }
                 }

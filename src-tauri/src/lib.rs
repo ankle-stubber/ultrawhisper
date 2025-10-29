@@ -214,6 +214,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         .expect("Failed to initialize destination storage");
     // Best-effort seeding; don't crash on error
     let _ = crate::destinations::seed_defaults_if_empty(&dest_storage);
+    // Migrate legacy binding configuration to destinations (Bundle 3)
+    let _ = crate::destinations::migrate_legacy_bindings_if_needed(app_handle, &dest_storage);
     app_handle.manage(dest_storage.clone());
 
     // Initialize workflow architecture components (Phase 0)
