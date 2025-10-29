@@ -2,6 +2,7 @@ use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, 
 use crate::settings::get_settings;
 use crate::streaming::chunker::{AudioChunk, AudioChunker};
 use crate::streaming::queue::{try_send_with_policy, BackpressurePolicy};
+use crate::streaming::writer::StreamingWavWriter;
 use crate::utils;
 use log::{debug, info, warn};
 use std::sync::{Arc, Mutex};
@@ -63,6 +64,9 @@ pub struct AudioRecordingManager {
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     is_open: Arc<Mutex<bool>>,
     is_recording: Arc<Mutex<bool>>,
+
+    /// Storage for the final filename after streaming recording stops
+    last_streaming_file_name: Arc<Mutex<Option<String>>>,
 }
 
 impl AudioRecordingManager {
@@ -84,6 +88,8 @@ impl AudioRecordingManager {
             recorder: Arc::new(Mutex::new(None)),
             is_open: Arc::new(Mutex::new(false)),
             is_recording: Arc::new(Mutex::new(false)),
+
+            last_streaming_file_name: Arc::new(Mutex::new(None)),
         };
 
         // Always-on?  Open immediately.
@@ -194,6 +200,20 @@ impl AudioRecordingManager {
 
         *self.mode.lock().unwrap() = new_mode;
         Ok(())
+    }
+
+    /* ---------- streaming audio storage ------------------------------------ */
+
+    /// Get and clear the last streaming recording filename.
+    ///
+    /// Returns the filename (e.g., "handy-1234567890.wav") if a streaming
+    /// recording completed successfully and produced a WAV file. This is a
+    /// "take" operation - calling this method clears the stored filename.
+    ///
+    /// # Returns
+    /// `Some(filename)` if a file was saved, `None` otherwise
+    pub fn get_last_streaming_file_name(&self) -> Option<String> {
+        self.last_streaming_file_name.lock().unwrap().take()
     }
 
     /* ---------- recording --------------------------------------------------- */
@@ -357,6 +377,10 @@ impl AudioRecordingManager {
                 binding_id, chunk_duration_ms, overlap_duration_ms
             );
 
+            // Clone handles needed in the consumer task
+            let app_handle = self.app_handle.clone();
+            let last_streaming_file_name = self.last_streaming_file_name.clone();
+
             // Spawn consumer task for chunking (runs in background, not on CPAL thread)
             tauri::async_runtime::spawn(async move {
                 let mut chunker = AudioChunker::new(
@@ -365,10 +389,43 @@ impl AudioRecordingManager {
                     WHISPER_SAMPLE_RATE as u32,
                 );
 
+                // Initialize the streaming WAV writer
+                // Note: In PR5, this will be gated by settings.streaming.save_streaming_audio
+                let unix_ts_secs = chrono::Utc::now().timestamp();
+                let mut writer_opt = match StreamingWavWriter::open(&app_handle, unix_ts_secs) {
+                    Ok(writer) => {
+                        debug!("Streaming WAV writer opened successfully");
+                        Some(writer)
+                    }
+                    Err(e) => {
+                        warn!("Failed to open streaming WAV writer: {}. Continuing without disk recording.", e);
+                        None
+                    }
+                };
+
+                let mut last_flush = Instant::now();
+                const FLUSH_INTERVAL_SECS: u64 = 5;
+
                 debug!("Chunker initialized, starting to process samples");
 
                 // Process samples as they arrive
                 while let Ok(samples) = sample_rx.recv() {
+                    // Append post-VAD samples to the WAV writer (before chunking)
+                    if let Some(ref mut writer) = writer_opt {
+                        if let Err(e) = writer.append(&samples) {
+                            warn!("Failed to append samples to WAV writer: {}. Disabling writer.", e);
+                            writer_opt = None;
+                        } else {
+                            // Periodically flush the writer
+                            if last_flush.elapsed().as_secs() >= FLUSH_INTERVAL_SECS {
+                                if let Err(e) = writer.flush() {
+                                    warn!("Failed to flush WAV writer: {}", e);
+                                }
+                                last_flush = Instant::now();
+                            }
+                        }
+                    }
+
                     if let Some(chunk) = chunker.add_samples(&samples) {
                         // Try to send chunk with backpressure policy
                         let result = try_send_with_policy(&chunk_sender, chunk.clone(), backpressure_policy);
@@ -400,6 +457,19 @@ impl AudioRecordingManager {
                 if let Some(final_chunk) = chunker.flush_remaining() {
                     let _ = chunk_sender.send(final_chunk).await;
                     debug!("Final chunk flushed");
+                }
+
+                // Finalize the WAV writer and store the filename
+                if let Some(writer) = writer_opt {
+                    match writer.finalize() {
+                        Ok(filename) => {
+                            debug!("Streaming WAV finalized: {}", filename);
+                            *last_streaming_file_name.lock().unwrap() = Some(filename);
+                        }
+                        Err(e) => {
+                            warn!("Failed to finalize streaming WAV: {}", e);
+                        }
+                    }
                 }
 
                 debug!("Streaming consumer task completed");
