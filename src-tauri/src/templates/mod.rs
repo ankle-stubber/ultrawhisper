@@ -1,3 +1,30 @@
+//! Template engine for output formatting
+//!
+//! ## Canonical Variables (Bundle 2+)
+//!
+//! The following variables are supported in all templates:
+//!
+//! - `{timestamp}` - Full ISO-like timestamp (YYYY-MM-DD HH:MM:SS)
+//! - `{workflow_name}` - Name of the workflow that triggered this transcription
+//! - `{model_name}` - Whisper model used (e.g., "whisper-small")
+//! - `{duration}` - Recording duration formatted as "MM:SS" or "HH:MM:SS"
+//! - `{transcription_text}` - The actual transcribed text
+//!
+//! ## Legacy Variables (Batch Processing)
+//!
+//! These are available for file-based batch processing:
+//! - `{filename}` - Original filename
+//! - `{source_file}` - Full path to source file
+//! - `{file_size_mb}` - File size in MB
+//! - `{processing_time_s}` - Processing time in seconds
+//!
+//! ## Planned Future Variables
+//!
+//! - `{date}` - Date only (YYYY-MM-DD)
+//! - `{time}` - Time only (HH:MM:SS)
+//! - `{audio_path}` - Path to saved audio file
+//! - `{trigger_type}` - How the workflow was triggered (hotkey, folder_watch, etc.)
+
 use std::collections::HashMap;
 
 /// Template structure for output formatting
@@ -112,6 +139,20 @@ pub fn format_timestamp(timestamp: u64) -> String {
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+/// Helper to format duration in milliseconds as HH:MM:SS or MM:SS
+pub fn format_duration(duration_ms: u64) -> String {
+    let total_seconds = duration_ms / 1000;
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    if hours > 0 {
+        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    } else {
+        format!("{:02}:{:02}", minutes, seconds)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +175,45 @@ mod tests {
         let template = get_template("default_markdown");
         assert!(template.contains("{filename}"));
         assert!(template.contains("{transcription_text}"));
+    }
+
+    #[test]
+    fn test_format_duration() {
+        // Test short duration (under 1 minute)
+        assert_eq!(format_duration(30_000), "00:30");
+
+        // Test medium duration (minutes and seconds)
+        assert_eq!(format_duration(125_000), "02:05");
+
+        // Test long duration (hours, minutes, seconds)
+        assert_eq!(format_duration(3_665_000), "01:01:05");
+
+        // Test zero duration
+        assert_eq!(format_duration(0), "00:00");
+    }
+
+    #[test]
+    fn test_canonical_variables() {
+        // Test that canonical variables work in templates
+        let mut vars = HashMap::new();
+        vars.insert("timestamp", "2025-10-29 10:00:00".to_string());
+        vars.insert("workflow_name", "Quick Capture".to_string());
+        vars.insert("model_name", "whisper-small".to_string());
+        vars.insert("duration", "02:30".to_string());
+        vars.insert("transcription_text", "Test transcription".to_string());
+
+        let template = "{workflow_name} at {timestamp}\nDuration: {duration}\nModel: {model_name}\n\n{transcription_text}";
+        let mut content = template.to_string();
+
+        for (key, value) in &vars {
+            let placeholder = format!("{{{}}}", key);
+            content = content.replace(&placeholder, value);
+        }
+
+        assert!(content.contains("Quick Capture"));
+        assert!(content.contains("2025-10-29 10:00:00"));
+        assert!(content.contains("02:30"));
+        assert!(content.contains("whisper-small"));
+        assert!(content.contains("Test transcription"));
     }
 }

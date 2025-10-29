@@ -19,7 +19,9 @@ pub struct Workflow {
     pub model_management: ModelManagement,
     pub streaming_enabled: bool,
     pub audio_processing: AudioProcessingConfig,
-    pub destinations: Vec<DestinationConfig>,
+    /// References to destination IDs (Bundle 2+)
+    /// Destinations are defined once in the destinations store and referenced here
+    pub destination_ids: Vec<String>,
 }
 
 /// Trigger configuration - what initiates this workflow
@@ -113,9 +115,13 @@ pub enum AudioFormat {
     Flac,
 }
 
-/// Output destination configuration
+/// Legacy output destination configuration (Phase 0)
+/// NOTE: This is kept for backwards compatibility during migration.
+/// New code should use the Destination entities from crate::destinations module.
+/// This will be deprecated once migration to destination entities is complete.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[deprecated(note = "Use crate::destinations::Destination instead")]
 pub enum DestinationConfig {
     Clipboard {
         paste_immediately: bool,
@@ -169,9 +175,7 @@ mod tests {
                 compress: None,
                 delete_after_processing: false,
             },
-            destinations: vec![DestinationConfig::Clipboard {
-                paste_immediately: true,
-            }],
+            destination_ids: vec!["active_window_default".to_string()],
         };
 
         // Test serialization round-trip

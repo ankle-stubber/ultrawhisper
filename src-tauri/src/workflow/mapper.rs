@@ -6,32 +6,18 @@ use std::path::PathBuf;
 
 /// Maps a ShortcutBinding and AppSettings to a Workflow
 ///
+/// NOTE (Bundle 2): This function is being refactored to use destination entities.
+/// For now, it uses default destination IDs. Bundle 3 will implement full migration
+/// from legacy binding configuration to destination references.
+///
 /// This function provides compatibility between the legacy binding system
 /// and the new workflow architecture by converting settings on-the-fly.
 pub fn binding_to_workflow(binding: &ShortcutBinding, settings: &AppSettings) -> Workflow {
-    let mut destinations = Vec::new();
-
-    // Add clipboard destination if paste_to_window is enabled
-    if binding.paste_to_window {
-        destinations.push(DestinationConfig::Clipboard {
-            paste_immediately: true,
-        });
-    }
-
-    // Add file destination if save_to_file is enabled
-    if binding.save_to_file {
-        let path = if let Some(ref custom_path) = binding.output_path {
-            PathBuf::from(custom_path)
-        } else {
-            PathBuf::from("~/Documents/UltraWhisper")
-        };
-
-        destinations.push(DestinationConfig::File {
-            path,
-            template: "default_markdown".to_string(),
-            naming_pattern: "transcription_{timestamp}.md".to_string(),
-        });
-    }
+    // Bundle 2: Simplified destination mapping
+    // Just use the default active window destination for now
+    // Bundle 3 will implement proper migration logic based on paste_to_window and save_to_file flags
+    let _paste_to_window = binding.paste_to_window;
+    let _save_to_file = binding.save_to_file;
 
     // Map model unload timeout to unload strategy
     let unload_strategy = match settings.model_unload_timeout {
@@ -76,7 +62,10 @@ pub fn binding_to_workflow(binding: &ShortcutBinding, settings: &AppSettings) ->
             compress: None,       // Phase 3 feature
             delete_after_processing: false,
         },
-        destinations,
+        // Bundle 2: Map to destination IDs
+        // For now, we reference the default destinations
+        // Bundle 3 will implement migration from legacy bindings
+        destination_ids: vec!["active_window_default".to_string()],
     }
 }
 

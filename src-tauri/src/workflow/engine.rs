@@ -2,11 +2,9 @@
 
 use super::destinations::{DestinationContext, DestinationResult, DestinationRouter, Metadata};
 use super::mapper::binding_to_workflow;
-use super::types::{DestinationConfig, Workflow};
+use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
-use crate::router::clipboard::ClipboardDestination;
-use crate::router::file::FileDestination;
 use crate::settings::get_settings;
 use crate::streaming::chunker::AudioChunk;
 use crate::streaming::session::StreamingSession;
@@ -59,7 +57,7 @@ impl WorkflowEngine {
         debug!(
             "Workflow loaded: {} with {} destination(s)",
             workflow.name,
-            workflow.destinations.len()
+            workflow.destination_ids.len()
         );
 
         Ok(workflow)
@@ -67,31 +65,27 @@ impl WorkflowEngine {
 
     /// Build a destination router from a workflow's destination configs
     ///
+    /// NOTE (Bundle 2): This is temporarily simplified during the transition
+    /// to destination entities. Bundle 3 will implement full destination lookup
+    /// and instantiation from the destination storage.
+    ///
     /// This method instantiates the appropriate destination implementations
     /// (Clipboard, File, etc.) based on the workflow configuration.
+    #[allow(unused_variables)]
     pub fn build_router(&self, workflow: &Workflow) -> Result<DestinationRouter> {
         let mut router = DestinationRouter::new();
 
-        for dest_config in &workflow.destinations {
-            match dest_config {
-                DestinationConfig::Clipboard { paste_immediately } => {
-                    debug!("Adding clipboard destination (paste: {})", paste_immediately);
-                    router.add_destination(Box::new(ClipboardDestination::new(*paste_immediately)));
-                }
-                DestinationConfig::File { path, .. } => {
-                    debug!("Adding file destination (path: {:?})", path);
-                    // Convert PathBuf to String for FileDestination
-                    // Expand tilde if present (matching batch semantics; support HOME and USERPROFILE)
-                    let path_str = path.to_string_lossy();
-                    let expanded_path = expand_tilde_str(&path_str);
-                    router.add_destination(Box::new(FileDestination::new(Some(expanded_path))));
-                }
-                DestinationConfig::Telegram { .. } | DestinationConfig::Webhook { .. } => {
-                    // Phase 1: External destinations not yet implemented
-                    debug!("Skipping external destination (Phase 4 feature)");
-                }
-            }
-        }
+        // Bundle 2: Destination IDs are now stored, but we haven't implemented
+        // the lookup yet. For now, just return an empty router.
+        // Bundle 3 will implement:
+        // 1. Look up each destination ID from DestinationStorage
+        // 2. Instantiate the appropriate destination based on its type
+        // 3. Apply templates with variables
+
+        debug!(
+            "Bundle 2: Router built with {} destination IDs (lookup not yet implemented)",
+            workflow.destination_ids.len()
+        );
 
         Ok(router)
     }
