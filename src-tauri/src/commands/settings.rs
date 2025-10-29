@@ -28,3 +28,11 @@ pub fn pick_directory(app: AppHandle) -> Result<Option<String>, String> {
         }
     }
 }
+
+#[tauri::command]
+pub fn change_use_workflow_engine_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = crate::settings::get_settings(&app);
+    settings.use_workflow_engine = enabled;
+    crate::settings::write_settings(&app, settings);
+    Ok(())
+}

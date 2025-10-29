@@ -94,6 +94,7 @@ export const SettingsSchema = z.object({
     min_file_size_kb: 1,
     max_file_size_mb: 500,
   }),
+  use_workflow_engine: z.boolean().optional().default(false),
 });
 
 export const BindingResponseSchema = z.object({

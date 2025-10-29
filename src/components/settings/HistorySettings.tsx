@@ -12,6 +12,8 @@ interface HistoryEntry {
   saved: boolean;
   title: string;
   transcription_text: string;
+  workflow_id?: string | null;
+  workflow_name?: string | null;
 }
 
 export const HistorySettings: React.FC = () => {
@@ -179,7 +181,14 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   return (
     <div className="px-4 py-2 pb-5 flex flex-col gap-3">
       <div className="flex justify-between items-center">
-        <p className="text-sm font-medium">{entry.title}</p>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium">{entry.title}</p>
+          {entry.workflow_name && (
+            <p className="text-xs text-text/60">
+              Workflow: {entry.workflow_name}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={handleCopyText}
