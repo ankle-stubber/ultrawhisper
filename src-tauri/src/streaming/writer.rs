@@ -11,6 +11,73 @@ use std::io::BufWriter;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+/// Audio format for streaming recordings.
+///
+/// This enum defines the supported audio formats for streaming transcription.
+/// Currently, only WAV is implemented. OPUS and FLAC support will be added in Phase 3b.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioFormat {
+    /// Uncompressed WAV format (16kHz, mono, 16-bit PCM)
+    Wav,
+    // TODO: Phase 3b - Implement OPUS compression
+    // Opus,
+    // TODO: Phase 3b - Implement FLAC lossless compression
+    // Flac,
+}
+
+impl AudioFormat {
+    /// Validates and parses an audio format string.
+    ///
+    /// # Arguments
+    /// * `format_str` - The format string to validate (e.g., "wav", "opus", "flac")
+    ///
+    /// # Returns
+    /// `Ok(AudioFormat)` if the format is valid and supported
+    /// `Err` if the format is unknown or not yet implemented
+    ///
+    /// # Example
+    /// ```
+    /// use ultrawhisper_app_lib::streaming::writer::AudioFormat;
+    ///
+    /// let format = AudioFormat::from_str("wav").unwrap();
+    /// assert_eq!(format, AudioFormat::Wav);
+    /// ```
+    pub fn from_str(format_str: &str) -> Result<Self> {
+        match format_str.to_lowercase().as_str() {
+            "wav" => Ok(AudioFormat::Wav),
+            // Phase 3b: Uncomment when implementing OPUS support
+            // "opus" => Ok(AudioFormat::Opus),
+            // Phase 3b: Uncomment when implementing FLAC support
+            // "flac" => Ok(AudioFormat::Flac),
+            _ => Err(anyhow::anyhow!(
+                "Unsupported audio format '{}'. Currently only 'wav' is supported.",
+                format_str
+            )),
+        }
+    }
+
+    /// Returns the file extension for this audio format.
+    ///
+    /// # Returns
+    /// The file extension without the dot (e.g., "wav", "opus", "flac")
+    pub fn file_extension(&self) -> &'static str {
+        match self {
+            AudioFormat::Wav => "wav",
+            // AudioFormat::Opus => "opus",
+            // AudioFormat::Flac => "flac",
+        }
+    }
+
+    /// Returns a human-readable name for this audio format.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            AudioFormat::Wav => "WAV (Uncompressed)",
+            // AudioFormat::Opus => "OPUS (Compressed)",
+            // AudioFormat::Flac => "FLAC (Lossless)",
+        }
+    }
+}
+
 /// A streaming WAV writer that records audio to disk during streaming transcription.
 ///
 /// This writer is designed to be owned by a single task (the consumer task) and should
@@ -227,6 +294,78 @@ mod tests {
     use super::*;
     use hound::WavReader;
     use std::env;
+
+    // ============================================================================
+    // AudioFormat Tests
+    // ============================================================================
+
+    #[test]
+    fn test_audio_format_from_str_wav() {
+        let format = AudioFormat::from_str("wav").unwrap();
+        assert_eq!(format, AudioFormat::Wav);
+    }
+
+    #[test]
+    fn test_audio_format_from_str_case_insensitive() {
+        assert_eq!(AudioFormat::from_str("WAV").unwrap(), AudioFormat::Wav);
+        assert_eq!(AudioFormat::from_str("Wav").unwrap(), AudioFormat::Wav);
+        assert_eq!(AudioFormat::from_str("wav").unwrap(), AudioFormat::Wav);
+    }
+
+    #[test]
+    fn test_audio_format_from_str_unsupported() {
+        // OPUS and FLAC are not yet supported in Phase 3
+        assert!(AudioFormat::from_str("opus").is_err());
+        assert!(AudioFormat::from_str("flac").is_err());
+        assert!(AudioFormat::from_str("mp3").is_err());
+        assert!(AudioFormat::from_str("unknown").is_err());
+    }
+
+    #[test]
+    fn test_audio_format_file_extension() {
+        assert_eq!(AudioFormat::Wav.file_extension(), "wav");
+    }
+
+    #[test]
+    fn test_audio_format_display_name() {
+        assert_eq!(AudioFormat::Wav.display_name(), "WAV (Uncompressed)");
+    }
+
+    #[test]
+    fn test_audio_format_debug() {
+        // Ensure the enum derives Debug correctly
+        let format = AudioFormat::Wav;
+        let debug_str = format!("{:?}", format);
+        assert!(debug_str.contains("Wav"));
+    }
+
+    #[test]
+    fn test_audio_format_clone() {
+        // Ensure the enum derives Clone correctly
+        let format = AudioFormat::Wav;
+        let cloned = format.clone();
+        assert_eq!(format, cloned);
+    }
+
+    #[test]
+    fn test_audio_format_copy() {
+        // Ensure the enum derives Copy correctly
+        let format = AudioFormat::Wav;
+        let copied = format; // Should copy, not move
+        assert_eq!(format, copied);
+    }
+
+    #[test]
+    fn test_audio_format_equality() {
+        // Ensure the enum derives PartialEq and Eq correctly
+        let format1 = AudioFormat::Wav;
+        let format2 = AudioFormat::Wav;
+        assert_eq!(format1, format2);
+    }
+
+    // ============================================================================
+    // StreamingWavWriter Tests
+    // ============================================================================
 
     /// Helper to create a temporary test directory
     fn create_test_dir() -> PathBuf {

@@ -305,7 +305,10 @@ impl WorkflowEngine {
             chunks_processed
         );
 
-        // 5. Finalize session and get complete transcript
+        // 5. Get audio duration before finalizing (finalize consumes session)
+        let audio_duration_secs = session.total_audio_duration();
+
+        // Finalize session and get complete transcript
         let mut final_transcript = session.finalize();
 
         info!(
@@ -314,16 +317,23 @@ impl WorkflowEngine {
             chunks_processed
         );
 
-        // 6. Backfill: Attempt to transcribe the saved WAV file for better quality
-        let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
-        let saved_file_name = audio_manager.get_last_streaming_file_name();
-
-        // Check if backfill is enabled in settings
+        // 6. Capture settings once at start for finalize/backfill
         let settings = crate::settings::get_settings(app);
         let enable_backfill = settings.streaming.enable_backfill;
 
+        // Get audio manager and check for saved file
+        let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
+        let saved_file_name = audio_manager.get_last_streaming_file_name();
+
+        // Track backfill status for end-of-session logging
+        let mut backfill_status = if enable_backfill {
+            "none" // Will be updated below
+        } else {
+            "disabled"
+        };
+
         if enable_backfill {
-            if let Some(ref file_name) = saved_file_name {
+            if let Some(file_name) = &saved_file_name {
                 debug!(
                     "Attempting whole-file backfill from saved audio: {}",
                     file_name
@@ -346,20 +356,21 @@ impl WorkflowEngine {
                             final_transcript.len()
                         );
                         final_transcript = backfilled_text;
+                        backfill_status = "whole-file";
                     }
                     Err(e) => {
                         warn!(
                             "Backfill failed for {}: {}. Using live transcript.",
                             file_name, e
                         );
+                        backfill_status = "failed";
                         // Keep the live merged transcript (final_transcript remains unchanged)
                     }
                 }
             } else {
                 debug!("No saved audio file available for backfill, using live transcript");
+                backfill_status = "none";
             }
-        } else {
-            debug!("Backfill disabled in settings, using live transcript");
         }
 
         // 7. Phase 1 parity: if transcription is empty, skip history and destinations
@@ -372,10 +383,10 @@ impl WorkflowEngine {
             // If we have a saved WAV file from the writer, use save_transcription_with_path
             // which doesn't write the WAV again (it already exists). Otherwise, fall back
             // to the legacy path with empty samples.
-            if let Some(file_name) = saved_file_name {
+            if let Some(file_name) = &saved_file_name {
                 debug!("Saving to history using existing file: {}", file_name);
                 hm.save_transcription_with_path(
-                    file_name,
+                    file_name.clone(),
                     final_transcript.clone(),
                     Some(&workflow.id),
                     Some(&workflow.name),
@@ -425,6 +436,19 @@ impl WorkflowEngine {
                 }
             }
         }
+
+        // Calculate writer stats
+        let writer_ok = saved_file_name.is_some();
+
+        // End-of-session summary log
+        info!(
+            "session={} chunks={} blocked=0 writer_secs={:.1} writer_ok={} backfill={}",
+            workflow.id, // Use workflow id as session id
+            chunks_processed,
+            audio_duration_secs,
+            writer_ok,
+            backfill_status
+        );
 
         info!("Streaming workflow execution complete for: {}", workflow.id);
 

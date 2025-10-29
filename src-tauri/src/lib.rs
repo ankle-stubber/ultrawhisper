@@ -25,6 +25,7 @@ use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 
 use tauri::tray::TrayIconBuilder;
@@ -39,6 +40,123 @@ struct ShortcutToggleStates {
 }
 
 type ManagedToggleState = Mutex<ShortcutToggleStates>;
+
+/// Clean up stale temporary files from the recordings directory.
+///
+/// This function removes `.tmp` files older than 3 days from the recordings directory.
+/// These files may have been left behind if the app crashed during recording.
+///
+/// # Arguments
+/// * `app` - The Tauri app handle for resolving the recordings directory
+///
+/// # Behavior
+/// - Logs warnings on failures but does not crash the application
+/// - Runs at startup to clean up leftover temporary files
+fn cleanup_stale_temp_files(app: &AppHandle) {
+    use log::{debug, warn};
+    use std::fs;
+
+    // Get the recordings directory
+    let recordings_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir.join("recordings"),
+        Err(e) => {
+            warn!("Failed to get app data directory for temp cleanup: {}", e);
+            return;
+        }
+    };
+
+    // If the recordings directory doesn't exist yet, nothing to clean
+    if !recordings_dir.exists() {
+        debug!("Recordings directory does not exist, skipping temp cleanup");
+        return;
+    }
+
+    // Read directory entries
+    let entries = match fs::read_dir(&recordings_dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            warn!("Failed to read recordings directory for temp cleanup: {}", e);
+            return;
+        }
+    };
+
+    // Calculate cutoff time (3 days ago)
+    let now = SystemTime::now();
+    let three_days_ago = now
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .saturating_sub(3 * 24 * 60 * 60); // 3 days in seconds
+
+    let mut cleaned_count = 0;
+    let mut failed_count = 0;
+
+    // Iterate through entries and clean up stale .tmp files
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        // Only process .tmp files
+        if path.extension().and_then(|s| s.to_str()) != Some("tmp") {
+            continue;
+        }
+
+        // Check file age
+        match fs::metadata(&path) {
+            Ok(metadata) => {
+                match metadata.modified() {
+                    Ok(modified) => {
+                        match modified.duration_since(UNIX_EPOCH) {
+                            Ok(duration) => {
+                                let file_age_secs = duration.as_secs();
+
+                                // If file is older than 3 days, delete it
+                                if file_age_secs < three_days_ago {
+                                    debug!(
+                                        "Removing stale temp file: {} (age: {} days)",
+                                        path.display(),
+                                        (now.duration_since(modified).unwrap().as_secs() / 86400)
+                                    );
+
+                                    match fs::remove_file(&path) {
+                                        Ok(_) => {
+                                            cleaned_count += 1;
+                                        }
+                                        Err(e) => {
+                                            warn!(
+                                                "Failed to remove stale temp file {}: {}",
+                                                path.display(),
+                                                e
+                                            );
+                                            failed_count += 1;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to get duration for {}: {}", path.display(), e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to get modified time for {}: {}", path.display(), e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get metadata for {}: {}", path.display(), e);
+            }
+        }
+    }
+
+    if cleaned_count > 0 {
+        debug!(
+            "Temp file cleanup complete: {} removed, {} failed",
+            cleaned_count, failed_count
+        );
+    } else {
+        debug!("No stale temp files found");
+    }
+}
 
 fn show_main_window(app: &AppHandle) {
     if let Some(main_window) = app.get_webview_window("main") {
@@ -63,6 +181,9 @@ fn show_main_window(app: &AppHandle) {
 }
 
 fn initialize_core_logic(app_handle: &AppHandle) {
+    // Clean up stale temporary files from previous sessions
+    cleanup_stale_temp_files(app_handle);
+
     // First, initialize the managers
     let recording_manager = Arc::new(
         AudioRecordingManager::new(app_handle).expect("Failed to initialize recording manager"),
