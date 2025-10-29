@@ -383,28 +383,36 @@ impl AudioRecordingManager {
 
             // Spawn consumer task for chunking (runs in background, not on CPAL thread)
             tauri::async_runtime::spawn(async move {
+                // Load settings to gate writer and configure flush interval
+                let settings = get_settings(&app_handle);
+                let save_streaming_audio = settings.streaming.save_streaming_audio;
+                let flush_interval_secs = settings.streaming.writer_flush_interval_secs as u64;
+
                 let mut chunker = AudioChunker::new(
                     chunk_duration_ms,
                     overlap_duration_ms,
                     WHISPER_SAMPLE_RATE as u32,
                 );
 
-                // Initialize the streaming WAV writer
-                // Note: In PR5, this will be gated by settings.streaming.save_streaming_audio
-                let unix_ts_secs = chrono::Utc::now().timestamp();
-                let mut writer_opt = match StreamingWavWriter::open(&app_handle, unix_ts_secs) {
-                    Ok(writer) => {
-                        debug!("Streaming WAV writer opened successfully");
-                        Some(writer)
+                // Initialize the streaming WAV writer (gated by settings)
+                let mut writer_opt = if save_streaming_audio {
+                    let unix_ts_secs = chrono::Utc::now().timestamp();
+                    match StreamingWavWriter::open(&app_handle, unix_ts_secs) {
+                        Ok(writer) => {
+                            debug!("Streaming WAV writer opened successfully");
+                            Some(writer)
+                        }
+                        Err(e) => {
+                            warn!("Failed to open streaming WAV writer: {}. Continuing without disk recording.", e);
+                            None
+                        }
                     }
-                    Err(e) => {
-                        warn!("Failed to open streaming WAV writer: {}. Continuing without disk recording.", e);
-                        None
-                    }
+                } else {
+                    debug!("Streaming audio saving disabled in settings");
+                    None
                 };
 
                 let mut last_flush = Instant::now();
-                const FLUSH_INTERVAL_SECS: u64 = 5;
 
                 debug!("Chunker initialized, starting to process samples");
 
@@ -417,7 +425,7 @@ impl AudioRecordingManager {
                             writer_opt = None;
                         } else {
                             // Periodically flush the writer
-                            if last_flush.elapsed().as_secs() >= FLUSH_INTERVAL_SECS {
+                            if last_flush.elapsed().as_secs() >= flush_interval_secs {
                                 if let Err(e) = writer.flush() {
                                     warn!("Failed to flush WAV writer: {}", e);
                                 }
