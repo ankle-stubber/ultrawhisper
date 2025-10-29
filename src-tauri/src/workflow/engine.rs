@@ -155,41 +155,46 @@ impl WorkflowEngine {
 
         info!("Transcription complete: {} characters", text.len());
 
-        // 4. Save to history with workflow tracking
-        let hm = app.state::<Arc<HistoryManager>>();
-        hm.save_transcription(
-            samples,
-            text.clone(),
-            Some(&workflow.id),
-            Some(&workflow.name),
-        )
-        .await
-        .map_err(|e| {
-            error!("Failed to save to history: {}", e);
-            anyhow!("History save failed: {}", e)
-        })?;
+        // 4. Match legacy parity: if transcription is empty, do not save history or route outputs
+        if text.trim().is_empty() {
+            debug!("Empty transcription; skipping history save and destination routing");
+        } else {
+            // Save to history with workflow tracking
+            let hm = app.state::<Arc<HistoryManager>>();
+            hm.save_transcription(
+                samples,
+                text.clone(),
+                Some(&workflow.id),
+                Some(&workflow.name),
+            )
+            .await
+            .map_err(|e| {
+                error!("Failed to save to history: {}", e);
+                anyhow!("History save failed: {}", e)
+            })?;
 
-        debug!("Saved to history with workflow_id: {}", workflow.id);
+            debug!("Saved to history with workflow_id: {}", workflow.id);
 
-        // 5. Route to destinations
-        let router = self.build_router(&workflow)?;
-        let ctx = DestinationContext {
-            app,
-            output_base: workflow.audio_processing.save_path.clone(),
-            audio_path: None, // Phase 1: Not providing audio path to destinations
-        };
-        let metadata = self.build_metadata(&workflow);
+            // 5. Route to destinations
+            let router = self.build_router(&workflow)?;
+            let ctx = DestinationContext {
+                app,
+                output_base: workflow.audio_processing.save_path.clone(),
+                audio_path: None, // Phase 1: Not providing audio path to destinations
+            };
+            let metadata = self.build_metadata(&workflow);
 
-        let results = router.route(&ctx, &text, &metadata).await?;
+            let results = router.route(&ctx, &text, &metadata).await?;
 
-        // Log destination results (but don't fail the overall operation)
-        for (idx, result) in results.iter().enumerate() {
-            match result {
-                DestinationResult::Success => {
-                    debug!("Destination {} succeeded", idx + 1);
-                }
-                DestinationResult::Failed(err) => {
-                    error!("Destination {} failed: {}", idx + 1, err);
+            // Log destination results (but don't fail the overall operation)
+            for (idx, result) in results.iter().enumerate() {
+                match result {
+                    DestinationResult::Success => {
+                        debug!("Destination {} succeeded", idx + 1);
+                    }
+                    DestinationResult::Failed(err) => {
+                        error!("Destination {} failed: {}", idx + 1, err);
+                    }
                 }
             }
         }

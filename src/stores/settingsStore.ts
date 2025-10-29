@@ -107,6 +107,8 @@ const settingUpdaters: {
   clipboard_handling: (value) =>
     invoke("change_clipboard_handling_setting", { handling: value }),
   history_limit: (value) => invoke("update_history_limit", { limit: value }),
+  use_workflow_engine: (value) =>
+    invoke("change_use_workflow_engine_setting", { enabled: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(
