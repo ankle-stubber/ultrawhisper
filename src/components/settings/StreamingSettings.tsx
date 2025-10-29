@@ -42,7 +42,7 @@ export const StreamingSettings: React.FC<StreamingSettingsProps> = React.memo(({
         checked={streamingSettings.enabled}
         onChange={(enabled) => updateStreamingSetting("enabled", enabled)}
         isUpdating={isUpdating("streaming")}
-        label="Enable Streaming Mode (Phase 2)"
+        label="Enable Streaming Mode"
         description="Process long recordings with chunked streaming transcription instead of batch mode. Reduces memory usage for recordings longer than 20 seconds."
         descriptionMode={descriptionMode}
         grouped={grouped}
@@ -154,7 +154,7 @@ export const StreamingSettings: React.FC<StreamingSettingsProps> = React.memo(({
 
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Phase 3: Audio Storage & Backfill (Debug)
+              Audio Storage & Backfill
             </h3>
 
             <div className="space-y-3">
