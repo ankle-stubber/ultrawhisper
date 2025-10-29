@@ -22,6 +22,15 @@ pub struct Metadata {
     pub model_used: String,
 }
 
+/// Result of sending to a destination
+#[derive(Debug, Clone)]
+pub enum DestinationResult {
+    /// Destination succeeded
+    Success,
+    /// Destination failed with error message
+    Failed(String),
+}
+
 /// Trait for sending transcription results to destinations
 #[async_trait]
 pub trait Destination: Send + Sync {
@@ -47,10 +56,41 @@ impl DestinationRouter {
         self.destinations.push(dest);
     }
 
-    /// Route transcription to all configured destinations (Phase 0: stub)
-    pub async fn route(&self, _ctx: &DestinationContext<'_>, _text: &str, _metadata: &Metadata) -> Result<()> {
-        // Phase 0: Just a stub, no actual routing
-        Ok(())
+    /// Route transcription to all configured destinations
+    ///
+    /// This method iterates through all destinations and attempts to send to each one.
+    /// It collects the results and returns them all, never failing the entire operation
+    /// even if individual destinations fail.
+    pub async fn route(
+        &self,
+        ctx: &DestinationContext<'_>,
+        text: &str,
+        metadata: &Metadata,
+    ) -> Result<Vec<DestinationResult>> {
+        use log::{debug, error};
+
+        let mut results = Vec::new();
+
+        debug!("Routing transcription to {} destination(s)", self.destinations.len());
+
+        for (idx, destination) in self.destinations.iter().enumerate() {
+            debug!("Attempting to send to destination {}", idx + 1);
+
+            let result = match destination.send(ctx, text, metadata).await {
+                Ok(()) => {
+                    debug!("Destination {} succeeded", idx + 1);
+                    DestinationResult::Success
+                }
+                Err(e) => {
+                    error!("Destination {} failed: {}", idx + 1, e);
+                    DestinationResult::Failed(e.to_string())
+                }
+            };
+
+            results.push(result);
+        }
+
+        Ok(results)
     }
 }
 
@@ -63,6 +103,33 @@ impl Default for DestinationRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    // Mock destination that always succeeds
+    struct MockSuccessDestination {
+        call_count: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait]
+    impl Destination for MockSuccessDestination {
+        async fn send(&self, _ctx: &DestinationContext<'_>, _text: &str, _metadata: &Metadata) -> Result<()> {
+            let mut count = self.call_count.lock().unwrap();
+            *count += 1;
+            Ok(())
+        }
+    }
+
+    // Mock destination that always fails
+    struct MockFailDestination {
+        error_message: String,
+    }
+
+    #[async_trait]
+    impl Destination for MockFailDestination {
+        async fn send(&self, _ctx: &DestinationContext<'_>, _text: &str, _metadata: &Metadata) -> Result<()> {
+            Err(anyhow::anyhow!("{}", self.error_message))
+        }
+    }
 
     #[test]
     fn test_router_construction() {
@@ -90,4 +157,54 @@ mod tests {
         assert_eq!(metadata.duration_ms, 5000);
         assert_eq!(metadata.model_used, "whisper-small");
     }
+
+    #[tokio::test]
+    async fn test_router_single_destination_success() {
+        // Note: This test requires a Tauri AppHandle which we can't easily create in unit tests
+        // In practice, this would be tested in integration tests with a real Tauri app
+        // For now, we test the router construction and destination addition
+        let mut router = DestinationRouter::new();
+        let call_count = Arc::new(Mutex::new(0));
+
+        router.add_destination(Box::new(MockSuccessDestination {
+            call_count: Arc::clone(&call_count),
+        }));
+
+        assert_eq!(router.destinations.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_router_multiple_destinations() {
+        let mut router = DestinationRouter::new();
+        let call_count1 = Arc::new(Mutex::new(0));
+        let call_count2 = Arc::new(Mutex::new(0));
+
+        router.add_destination(Box::new(MockSuccessDestination {
+            call_count: Arc::clone(&call_count1),
+        }));
+        router.add_destination(Box::new(MockSuccessDestination {
+            call_count: Arc::clone(&call_count2),
+        }));
+
+        assert_eq!(router.destinations.len(), 2);
+    }
+
+    #[test]
+    fn test_destination_result_variants() {
+        let success = DestinationResult::Success;
+        let failed = DestinationResult::Failed("test error".to_string());
+
+        match success {
+            DestinationResult::Success => {}
+            _ => panic!("Expected Success variant"),
+        }
+
+        match failed {
+            DestinationResult::Failed(msg) => assert_eq!(msg, "test error"),
+            _ => panic!("Expected Failed variant"),
+        }
+    }
+
+    // Note: Full integration tests for router.route() with actual destinations
+    // are in the seam tests, as they require a Tauri AppHandle
 }

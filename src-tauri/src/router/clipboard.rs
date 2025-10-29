@@ -3,7 +3,6 @@
 use crate::workflow::destinations::{Destination, DestinationContext, Metadata};
 use anyhow::Result;
 use async_trait::async_trait;
-use tauri::Manager;
 
 // Phase 0: Allow dead code as these types are scaffolding for future phases
 #[allow(dead_code)]
