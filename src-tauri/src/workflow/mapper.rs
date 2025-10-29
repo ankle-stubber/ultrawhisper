@@ -13,11 +13,19 @@ use std::path::PathBuf;
 /// This function provides compatibility between the legacy binding system
 /// and the new workflow architecture by converting settings on-the-fly.
 pub fn binding_to_workflow(binding: &ShortcutBinding, settings: &AppSettings) -> Workflow {
-    // Bundle 2: Simplified destination mapping
-    // Just use the default active window destination for now
-    // Bundle 3 will implement proper migration logic based on paste_to_window and save_to_file flags
-    let _paste_to_window = binding.paste_to_window;
-    let _save_to_file = binding.save_to_file;
+    // Bundle 2: Simplified destination mapping using default destination IDs
+    // Map legacy binding flags to destination IDs
+    let mut destination_ids = Vec::new();
+    if binding.paste_to_window {
+        destination_ids.push("active_window_default".to_string());
+    }
+    if binding.save_to_file {
+        destination_ids.push("file_default".to_string());
+    }
+    // Fallback: if neither set, default to active window to preserve UX
+    if destination_ids.is_empty() {
+        destination_ids.push("active_window_default".to_string());
+    }
 
     // Map model unload timeout to unload strategy
     let unload_strategy = match settings.model_unload_timeout {
@@ -62,10 +70,8 @@ pub fn binding_to_workflow(binding: &ShortcutBinding, settings: &AppSettings) ->
             compress: None,       // Phase 3 feature
             delete_after_processing: false,
         },
-        // Bundle 2: Map to destination IDs
-        // For now, we reference the default destinations
-        // Bundle 3 will implement migration from legacy bindings
-        destination_ids: vec!["active_window_default".to_string()],
+        // Destination references (Bundle 2)
+        destination_ids,
     }
 }
 
@@ -130,14 +136,7 @@ mod tests {
 
         assert_eq!(workflow.id, "transcribe");
         assert_eq!(workflow.name, "Test transcribe");
-        assert_eq!(workflow.destinations.len(), 1);
-
-        match &workflow.destinations[0] {
-            DestinationConfig::Clipboard { paste_immediately } => {
-                assert!(paste_immediately);
-            }
-            _ => panic!("Expected Clipboard destination"),
-        }
+        assert_eq!(workflow.destination_ids, vec!["active_window_default".to_string()]);
     }
 
     #[test]
@@ -147,16 +146,8 @@ mod tests {
 
         let workflow = binding_to_workflow(&binding, &settings);
 
-        assert_eq!(workflow.destinations.len(), 1);
-
-        match &workflow.destinations[0] {
-            DestinationConfig::File { path, template, naming_pattern } => {
-                assert_eq!(path, &PathBuf::from("~/Documents/UltraWhisper"));
-                assert_eq!(template, "default_markdown");
-                assert_eq!(naming_pattern, "transcription_{timestamp}.md");
-            }
-            _ => panic!("Expected File destination"),
-        }
+        assert!(workflow.destination_ids.contains(&"file_default".to_string()));
+        assert_eq!(workflow.destination_ids.len(), 1);
     }
 
     #[test]
@@ -166,23 +157,9 @@ mod tests {
 
         let workflow = binding_to_workflow(&binding, &settings);
 
-        assert_eq!(workflow.destinations.len(), 2);
-
-        // Check for clipboard destination
-        let has_clipboard = workflow.destinations.iter().any(|d| {
-            matches!(d, DestinationConfig::Clipboard { paste_immediately: true })
-        });
-        assert!(has_clipboard);
-
-        // Check for file destination with custom path
-        let has_file = workflow.destinations.iter().any(|d| {
-            matches!(
-                d,
-                DestinationConfig::File { path, .. }
-                if path == &PathBuf::from("/custom/path")
-            )
-        });
-        assert!(has_file);
+        assert!(workflow.destination_ids.contains(&"active_window_default".to_string()));
+        assert!(workflow.destination_ids.contains(&"file_default".to_string()));
+        assert_eq!(workflow.destination_ids.len(), 2);
     }
 
     #[test]

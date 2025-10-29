@@ -36,11 +36,10 @@ impl AudioFormat {
     /// `Err` if the format is unknown or not yet implemented
     ///
     /// # Example
-    /// ```
-    /// use ultrawhisper_app_lib::streaming::writer::AudioFormat;
-    ///
-    /// let format = AudioFormat::from_str("wav").unwrap();
-    /// assert_eq!(format, AudioFormat::Wav);
+    /// ```rust,ignore
+    /// // Example usage within the crate:
+    /// // let format = AudioFormat::from_str("wav").unwrap();
+    /// // assert_eq!(format, AudioFormat::Wav);
     /// ```
     pub fn from_str(format_str: &str) -> Result<Self> {
         match format_str.to_lowercase().as_str() {

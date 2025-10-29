@@ -209,6 +209,13 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
     app_handle.manage(batch_manager.clone());
 
+    // Initialize destination storage and seed defaults (Bundle 2)
+    let dest_storage = crate::destinations::DestinationStorage::new(app_handle.clone())
+        .expect("Failed to initialize destination storage");
+    // Best-effort seeding; don't crash on error
+    let _ = crate::destinations::seed_defaults_if_empty(&dest_storage);
+    app_handle.manage(dest_storage.clone());
+
     // Initialize workflow architecture components (Phase 0)
     let model_pool = Arc::new(model_pool::ModelPool::new(Arc::clone(&transcription_manager)));
     let workflow_engine = Arc::new(workflow::WorkflowEngine::new(Arc::clone(&model_pool)));
