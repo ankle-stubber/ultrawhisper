@@ -231,6 +231,22 @@ pub struct StreamingSettings {
     /// Policy for handling backpressure when queue is full
     #[serde(default)]
     pub backpressure_policy: BackpressurePolicy,
+
+    /// Phase 3: Save streaming audio to disk
+    #[serde(default = "default_save_streaming_audio")]
+    pub save_streaming_audio: bool,
+
+    /// Phase 3: Enable whole-file backfill after recording
+    #[serde(default = "default_enable_backfill")]
+    pub enable_backfill: bool,
+
+    /// Phase 3: Flush interval for audio writer in seconds
+    #[serde(default = "default_writer_flush_interval_secs")]
+    pub writer_flush_interval_secs: u32,
+
+    /// Phase 3: Audio format (currently only "wav" supported)
+    #[serde(default = "default_audio_format")]
+    pub audio_format: String,
 }
 
 impl Default for StreamingSettings {
@@ -242,6 +258,10 @@ impl Default for StreamingSettings {
             overlap_seconds: default_overlap_seconds(),
             max_queue_size: default_max_queue_size(),
             backpressure_policy: BackpressurePolicy::Block,
+            save_streaming_audio: default_save_streaming_audio(),
+            enable_backfill: default_enable_backfill(),
+            writer_flush_interval_secs: default_writer_flush_interval_secs(),
+            audio_format: default_audio_format(),
         }
     }
 }
@@ -259,6 +279,22 @@ fn default_overlap_seconds() -> u32 {
 }
 
 fn default_max_queue_size() -> usize { 10 }
+
+fn default_save_streaming_audio() -> bool {
+    true
+}
+
+fn default_enable_backfill() -> bool {
+    true
+}
+
+fn default_writer_flush_interval_secs() -> u32 {
+    5
+}
+
+fn default_audio_format() -> String {
+    "wav".to_string()
+}
 
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -544,4 +580,54 @@ pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
 pub fn get_history_limit(app: &AppHandle) -> usize {
     let settings = get_settings(app);
     settings.history_limit
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_settings_defaults() {
+        let settings = StreamingSettings::default();
+
+        // Verify Phase 2 defaults
+        assert_eq!(settings.enabled, false);
+        assert_eq!(settings.auto_enable_threshold_seconds, 300);
+        assert_eq!(settings.chunk_duration_seconds, 20);
+        assert_eq!(settings.overlap_seconds, 2);
+        assert_eq!(settings.max_queue_size, 10);
+        assert_eq!(settings.backpressure_policy, BackpressurePolicy::Block);
+
+        // Verify Phase 3 defaults
+        assert_eq!(settings.save_streaming_audio, true);
+        assert_eq!(settings.enable_backfill, true);
+        assert_eq!(settings.writer_flush_interval_secs, 5);
+        assert_eq!(settings.audio_format, "wav");
+    }
+
+    #[test]
+    fn test_streaming_settings_serde_roundtrip() {
+        let settings = StreamingSettings::default();
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&settings).expect("Failed to serialize");
+        let deserialized: StreamingSettings = serde_json::from_str(&json)
+            .expect("Failed to deserialize");
+
+        // Verify all fields match
+        assert_eq!(deserialized.enabled, settings.enabled);
+        assert_eq!(deserialized.save_streaming_audio, settings.save_streaming_audio);
+        assert_eq!(deserialized.enable_backfill, settings.enable_backfill);
+        assert_eq!(deserialized.writer_flush_interval_secs, settings.writer_flush_interval_secs);
+        assert_eq!(deserialized.audio_format, settings.audio_format);
+    }
+
+    #[test]
+    fn test_streaming_settings_default_functions() {
+        // Verify individual default functions
+        assert_eq!(default_save_streaming_audio(), true);
+        assert_eq!(default_enable_backfill(), true);
+        assert_eq!(default_writer_flush_interval_secs(), 5);
+        assert_eq!(default_audio_format(), "wav");
+    }
 }

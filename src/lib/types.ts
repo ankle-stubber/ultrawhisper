@@ -68,6 +68,10 @@ export const StreamingSettingsSchema = z.object({
   overlap_seconds: z.number().optional().default(2),
   max_queue_size: z.number().optional().default(10),
   backpressure_policy: BackpressurePolicySchema.optional().default("Block"),
+  save_streaming_audio: z.boolean().optional().default(true),
+  enable_backfill: z.boolean().optional().default(true),
+  writer_flush_interval_secs: z.number().optional().default(5),
+  audio_format: z.string().optional().default("wav"),
 });
 export type StreamingSettings = z.infer<typeof StreamingSettingsSchema>;
 
@@ -115,6 +119,10 @@ export const SettingsSchema = z.object({
     overlap_seconds: 2,
     max_queue_size: 10,
     backpressure_policy: "Block",
+    save_streaming_audio: true,
+    enable_backfill: true,
+    writer_flush_interval_secs: 5,
+    audio_format: "wav",
   }),
 });
 

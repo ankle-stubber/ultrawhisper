@@ -315,45 +315,51 @@ impl WorkflowEngine {
         );
 
         // 6. Backfill: Attempt to transcribe the saved WAV file for better quality
-        // TODO(PR5): Gate this with settings.streaming.enable_backfill
-        // For now, always attempt backfill if a WAV file was saved
         let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
         let saved_file_name = audio_manager.get_last_streaming_file_name();
 
-        if let Some(ref file_name) = saved_file_name {
-            debug!(
-                "Attempting whole-file backfill from saved audio: {}",
-                file_name
-            );
+        // Check if backfill is enabled in settings
+        let settings = crate::settings::get_settings(app);
+        let enable_backfill = settings.streaming.enable_backfill;
 
-            // Get transcription manager from model pool
-            let tm_state = app.state::<Arc<crate::managers::transcription::TranscriptionManager>>();
+        if enable_backfill {
+            if let Some(ref file_name) = saved_file_name {
+                debug!(
+                    "Attempting whole-file backfill from saved audio: {}",
+                    file_name
+                );
 
-            match crate::streaming::backfill::backfill_whole_file(
-                app,
-                file_name,
-                tm_state.inner().clone(),
-            )
-            .await
-            {
-                Ok(backfilled_text) => {
-                    info!(
-                        "Backfill successful: {} characters (was {} from live chunks)",
-                        backfilled_text.len(),
-                        final_transcript.len()
-                    );
-                    final_transcript = backfilled_text;
+                // Get transcription manager from model pool
+                let tm_state = app.state::<Arc<crate::managers::transcription::TranscriptionManager>>();
+
+                match crate::streaming::backfill::backfill_whole_file(
+                    app,
+                    file_name,
+                    tm_state.inner().clone(),
+                )
+                .await
+                {
+                    Ok(backfilled_text) => {
+                        info!(
+                            "Backfill successful: {} characters (was {} from live chunks)",
+                            backfilled_text.len(),
+                            final_transcript.len()
+                        );
+                        final_transcript = backfilled_text;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Backfill failed for {}: {}. Using live transcript.",
+                            file_name, e
+                        );
+                        // Keep the live merged transcript (final_transcript remains unchanged)
+                    }
                 }
-                Err(e) => {
-                    warn!(
-                        "Backfill failed for {}: {}. Using live transcript.",
-                        file_name, e
-                    );
-                    // Keep the live merged transcript (final_transcript remains unchanged)
-                }
+            } else {
+                debug!("No saved audio file available for backfill, using live transcript");
             }
         } else {
-            debug!("No saved audio file available for backfill, using live transcript");
+            debug!("Backfill disabled in settings, using live transcript");
         }
 
         // 7. Phase 1 parity: if transcription is empty, skip history and destinations
