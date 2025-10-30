@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 
@@ -39,6 +39,9 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<DestinationEntity[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
+  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +58,16 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Listen for destination changes from other views
+  useEffect(() => {
+    const handleDestinationsChanged = () => {
+      load();
+    };
+
+    window.addEventListener("destinations-changed", handleDestinationsChanged);
+    return () => window.removeEventListener("destinations-changed", handleDestinationsChanged);
   }, [load]);
 
   // Sorted view used for rendering and auto-select logic
@@ -77,43 +90,116 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
     }
   }, [loading, sorted, selectedId, onSelect]);
 
-  const handleAddTelegram = useCallback(async () => {
+  const handleCreateDestination = useCallback(async (type: "telegram" | "file_system" | "active_window") => {
     setIsCreating(true);
-    try {
-      // If telegram_default exists, just select it
-      const existing = items.find(
-        (d) => d.id === "telegram_default" || (d.config as any).type === "telegram"
-      );
-      if (existing) {
-        onSelect(existing.id);
-        return;
-      }
+    setShowCreateMenu(false);
 
-      const newDest: DestinationEntity = {
-        id: "telegram_default",
-        name: "Telegram",
-        config: {
-          type: "telegram",
-          credential_id: "telegram_default",
+    try {
+      const id = crypto.randomUUID();
+
+      const nameDefaults = {
+        active_window: "Active Window",
+        file_system: "File Output",
+        telegram: "Telegram",
+      };
+
+      const configDefaults = {
+        active_window: {
+          type: "active_window" as const,
+          paste_method: "ctrl_v" as const,
+          preserve_clipboard: false,
+        },
+        file_system: {
+          type: "file_system" as const,
+          path: "",
+          extension: "md",
+          filename_pattern: "transcription_{timestamp}.md",
+        },
+        telegram: {
+          type: "telegram" as const,
+          credential_id: `telegram_${id.slice(0, 8)}`,
           chat_id: "",
           include_audio: false,
         },
-        template: "[{timestamp}] {workflow_name}\n\n{transcription_text}",
+      };
+
+      const newDest: DestinationEntity = {
+        id,
+        name: nameDefaults[type],
+        config: configDefaults[type],
       };
 
       await invoke("create_destination", { destination: newDest });
-      toast.success("Telegram destination created");
+      toast.success(`${nameDefaults[type]} destination created`);
       await load();
-      onSelect("telegram_default");
+      onSelect(id);
+      // Notify other views (e.g., WorkflowEditor) to refresh destinations
+      window.dispatchEvent(new CustomEvent("destinations-changed"));
     } catch (e: any) {
       const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
-      toast.error(`Failed to create Telegram destination: ${msg}`);
+      toast.error(`Failed to create destination: ${msg}`);
     } finally {
       setIsCreating(false);
     }
-  }, [items, load, onSelect]);
+  }, [load, onSelect]);
 
-  
+  // Click outside and Escape handlers for create menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
+        setShowCreateMenu(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowCreateMenu(false);
+      }
+    };
+
+    if (showCreateMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }
+  }, [showCreateMenu]);
+
+  // Focus first menu item when menu opens
+  useEffect(() => {
+    if (showCreateMenu && firstMenuItemRef.current) {
+      firstMenuItemRef.current.focus();
+    }
+  }, [showCreateMenu]);
+
+
+
+  // Create menu component
+  const CreateMenu: React.FC<{ onSelect: (type: "telegram" | "file_system" | "active_window") => void }> = ({ onSelect }) => (
+    <div className="absolute right-0 top-full mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 min-w-[160px]">
+      <button
+        ref={firstMenuItemRef}
+        onClick={() => onSelect("telegram")}
+        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors focus:bg-logo-primary/10 focus:outline-none"
+      >
+        Telegram
+      </button>
+      <button
+        onClick={() => onSelect("file_system")}
+        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors border-t border-mid-gray/20 focus:bg-logo-primary/10 focus:outline-none"
+      >
+        File System
+      </button>
+      <button
+        onClick={() => onSelect("active_window")}
+        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors border-t border-mid-gray/20 focus:bg-logo-primary/10 focus:outline-none"
+      >
+        Active Window
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -124,13 +210,20 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
             Configure where transcriptions are sent
           </p>
         </div>
-        <button
-          onClick={handleAddTelegram}
-          className="px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700"
-          title="Add Telegram destination"
-        >
-          + Telegram
-        </button>
+        {sorted.length > 0 && (
+          <div className="relative" ref={createMenuRef}>
+            <button
+              onClick={() => setShowCreateMenu(!showCreateMenu)}
+              disabled={isCreating}
+              className="px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              title="Create new destination"
+            >
+              + New Destination
+            </button>
+
+            {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {loading && (
@@ -146,13 +239,17 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
                 Create your first destination to route transcriptions
               </p>
             </div>
-            <button
-              onClick={handleAddTelegram}
-              disabled={isCreating}
-              className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? "Creating..." : "+ Create Telegram Destination"}
-            </button>
+            <div className="relative" ref={createMenuRef}>
+              <button
+                onClick={() => setShowCreateMenu(!showCreateMenu)}
+                disabled={isCreating}
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? "Creating..." : "+ New Destination"}
+              </button>
+
+              {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
+            </div>
           </div>
         )}
         {!loading &&

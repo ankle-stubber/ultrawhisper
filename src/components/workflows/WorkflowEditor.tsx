@@ -98,6 +98,18 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     loadWorkflow();
   }, [loadWorkflow]);
 
+  // Listen for destination changes from other views
+  useEffect(() => {
+    const handleDestinationsChanged = () => {
+      invoke<Destination[]>("list_destinations")
+        .then(setDestinations)
+        .catch(() => {}); // Silent fail, destinations might already be loaded
+    };
+
+    window.addEventListener("destinations-changed", handleDestinationsChanged);
+    return () => window.removeEventListener("destinations-changed", handleDestinationsChanged);
+  }, []);
+
   // Dirty detection
   useEffect(() => {
     if (!formData || !originalData) {
@@ -466,16 +478,16 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const getDestinationDetails = (dest: Destination): string => {
     switch (dest.config.type) {
       case "ActiveWindow": {
-        const pasteMethod = dest.config.ActiveWindow.paste_method || "ctrl_v";
-        const preserveClipboard = dest.config.ActiveWindow.preserve_clipboard || false;
+        const pasteMethod = dest.config.paste_method || "ctrl_v";
+        const preserveClipboard = dest.config.preserve_clipboard || false;
         const method = pasteMethod === "direct" ? "Direct paste" : "Ctrl+V";
         const clipboardStatus = preserveClipboard ? "On" : "Off";
         return `${method} • Preserve clipboard: ${clipboardStatus}`;
       }
 
       case "FileSystem": {
-        const path = dest.config.FileSystem.path;
-        const pattern = dest.config.FileSystem.filename_pattern;
+        const path = dest.config.path;
+        const pattern = dest.config.filename_pattern;
         if (pattern && pattern !== "transcription_{timestamp}.md") {
           return `${path} • ${pattern}`;
         }
@@ -483,8 +495,8 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
       }
 
       case "Telegram": {
-        const chatId = dest.config.Telegram.chat_id || "(no chat)";
-        const credId = dest.config.Telegram.credential_id || "telegram_default";
+        const chatId = dest.config.chat_id || "(no chat)";
+        const credId = dest.config.credential_id || "telegram_default";
         return `Chat: ${chatId} • Credential: ${credId}`;
       }
 
