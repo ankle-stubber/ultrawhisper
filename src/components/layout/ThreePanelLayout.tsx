@@ -26,7 +26,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
       />
 
       {/* Middle: Items List (280px) */}
-      <div className="w-70 border-r border-mid-gray/20 flex flex-col overflow-hidden">
+      <div className="w-[280px] border-r border-mid-gray/20 flex flex-col overflow-hidden">
         {itemsPanel}
       </div>
 

@@ -72,13 +72,10 @@ export const useLogsStore = create<LogsStore>((set, get) => ({
     // Load initial logs
     await get().loadLogs();
 
-    // Listen for new log entries (debounced by backend)
-    unlistenLogEntry = await listen<LogEntry>("log-entry", (event) => {
-      const newEntry = event.payload;
-      set((state) => ({
-        logs: [...state.logs, newEntry],
-        bufferSize: state.bufferSize + 1,
-      }));
+    // Listen for new log entries (debounced by backend). To avoid missing
+    // entries during coalescing, refresh from backend instead of appending payload.
+    unlistenLogEntry = await listen("log-entry", async () => {
+      await get().loadLogs();
     });
 
     // Listen for log cleared event
