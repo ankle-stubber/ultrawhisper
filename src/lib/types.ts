@@ -159,3 +159,23 @@ export const ModelInfoSchema = z.object({
 });
 
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;
+
+// Log types for Bundle 6
+export const LogEntrySchema = z.object({
+  timestamp: z.number(),
+  level: z.string(),
+  target: z.string(),
+  message: z.string(),
+});
+
+export type LogEntry = z.infer<typeof LogEntrySchema>;
+
+export const LogFilterSchema = z.object({
+  level: z.string().optional(),
+  search: z.string().optional(),
+  workflow: z.string().optional(),
+});
+
+export type LogFilter = z.infer<typeof LogFilterSchema>;
+
+export type Category = "workflows" | "destinations" | "models" | "history" | "logs";

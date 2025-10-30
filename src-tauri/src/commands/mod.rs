@@ -1,6 +1,8 @@
 pub mod audio;
 pub mod batch;
+pub mod destinations;
 pub mod history;
+pub mod logs;
 pub mod models;
 pub mod settings;
 pub mod telegram;
