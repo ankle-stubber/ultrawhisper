@@ -1,10 +1,68 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 // import { open } from "@tauri-apps/plugin-dialog";  // Temporarily disabled to debug
-import { Trash2, Folder, Plus, Play } from "lucide-react";
+import { Trash2, Folder, Plus, Play, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings } from "../../hooks/useSettings";
 import type { BatchTranscriptionSettings } from "../../lib/types";
+
+/**
+ * Validate and normalize file patterns
+ * Converts ".wav" to "*.wav" and validates format
+ */
+function validateAndNormalizePatterns(input: string): { valid: boolean; patterns: string[]; error?: string } {
+  const rawPatterns = input
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (rawPatterns.length === 0) {
+    return { valid: false, patterns: [], error: "At least one pattern is required" };
+  }
+
+  const normalizedPatterns: string[] = [];
+
+  for (const pattern of rawPatterns) {
+    let normalized = pattern;
+
+    // Auto-convert ".ext" to "*.ext"
+    if (normalized.startsWith(".")) {
+      normalized = "*" + normalized;
+    }
+
+    // Validate pattern format
+    if (!normalized.startsWith("*.")) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Patterns must be in format "*.ext" (e.g., "*.wav", "*.mp3")`
+      };
+    }
+
+    // Extract extension and validate it's not empty
+    const extension = normalized.substring(2);
+    if (extension.length === 0) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Extension cannot be empty`
+      };
+    }
+
+    // Check for invalid characters in extension
+    if (extension.includes("*") || extension.includes("/") || extension.includes("\\")) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Extension cannot contain wildcards or path separators`
+      };
+    }
+
+    normalizedPatterns.push(normalized);
+  }
+
+  return { valid: true, patterns: normalizedPatterns };
+}
 
 const intervalOptions = [
   { value: 60, label: "1 minute" },
@@ -18,6 +76,7 @@ export default function BatchProcessingSettings() {
   const { settings, refreshSettings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [newFolder, setNewFolder] = useState("");
+  const [patternError, setPatternError] = useState<string | null>(null);
 
   const batchSettings = settings?.batch_transcription || {
     enabled: false,
@@ -237,25 +296,47 @@ export default function BatchProcessingSettings() {
             File Patterns
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
-            Comma-separated patterns for audio files (e.g., *.wav, *.mp3, *.m4a)
+            Comma-separated patterns for audio files (e.g., *.wav, .mp3, *.m4a)
           </p>
           <input
             id="file-patterns"
             type="text"
-            className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 font-mono text-sm"
+            className={`w-full px-3 py-2 border rounded-md dark:bg-gray-800 font-mono text-sm ${
+              patternError
+                ? "border-red-500 dark:border-red-500"
+                : "dark:border-gray-700"
+            }`}
             value={batchSettings.file_patterns?.join(", ") || "*.wav"}
             onChange={(e) => {
-              const patterns = e.target.value
-                .split(",")
-                .map((p) => p.trim())
-                .filter((p) => p.length > 0);
-              updateBatchSettings({ file_patterns: patterns });
+              const result = validateAndNormalizePatterns(e.target.value);
+
+              if (result.valid) {
+                setPatternError(null);
+                updateBatchSettings({ file_patterns: result.patterns });
+              } else {
+                setPatternError(result.error || "Invalid pattern");
+              }
             }}
-            placeholder="*.wav, *.mp3, *.m4a"
+            onBlur={() => {
+              // Clear error on blur if current value is valid
+              const currentValue = batchSettings.file_patterns?.join(", ") || "*.wav";
+              const result = validateAndNormalizePatterns(currentValue);
+              if (result.valid) {
+                setPatternError(null);
+              }
+            }}
+            placeholder="*.wav, .mp3, *.m4a"
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Supported formats: *.wav, *.mp3, *.m4a (case-insensitive)
-          </p>
+          {patternError ? (
+            <div className="flex items-start gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
+              <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{patternError}</span>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Supported formats: *.wav, *.mp3, *.m4a (case-insensitive). You can use shorthand like ".wav"
+            </p>
+          )}
         </div>
 
         {/* Check Interval */}
