@@ -149,8 +149,8 @@ function App() {
   const renderDetailPanel = () => {
     return (
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col p-4 gap-4">
+        <div className="flex-1 overflow-y-auto w-full">
+          <div className="flex flex-col p-4 gap-4 w-full">
             <AccessibilityPermissions />
             {activeCategory === "workflows" && (
               <WorkflowDetail workflowId={selectedItemId} />

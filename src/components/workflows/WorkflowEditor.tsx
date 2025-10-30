@@ -480,7 +480,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
   return (
     <div className="flex flex-col h-full min-w-0 min-h-0 w-full">
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 w-full min-w-0 max-w-full">
+      <div className="flex-1 p-6 space-y-6 w-full min-w-0 max-w-full">
         {/* General Section */}
         <SettingsGroup title="General">
           <SettingContainer
