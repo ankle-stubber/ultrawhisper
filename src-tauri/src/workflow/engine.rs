@@ -1,7 +1,7 @@
 //! Workflow execution engine - orchestrates the entire pipeline
 
 use super::destinations::{DestinationContext, DestinationResult, DestinationRouter, Metadata};
-use super::mapper::binding_to_workflow;
+use super::mapper::{binding_to_workflow, binding_to_workflow_with_storage};
 use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
@@ -52,8 +52,9 @@ impl WorkflowEngine {
             .get(binding_id)
             .ok_or_else(|| anyhow!("Binding '{}' not found in settings", binding_id))?;
 
-        // Map the binding to a workflow
-        let workflow = binding_to_workflow(binding, &settings);
+        // Map the binding to a workflow (Bundle 3: prefer migrated destination IDs via storage)
+        let storage = app.state::<DestinationStorage>();
+        let workflow = binding_to_workflow_with_storage(binding, &settings, &*storage);
 
         debug!(
             "Workflow loaded: {} with {} destination(s)",

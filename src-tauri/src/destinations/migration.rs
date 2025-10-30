@@ -11,7 +11,7 @@ use crate::settings::{get_settings, AppSettings, PasteMethod, ClipboardHandling}
 use anyhow::Result;
 use log::{debug, info, warn};
 use std::collections::HashMap;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Check if any bindings need migration and perform it
 pub fn migrate_legacy_bindings_if_needed(app: &AppHandle, storage: &DestinationStorage) -> Result<()> {
@@ -118,32 +118,40 @@ fn create_destinations_for_binding(
 
     // 2. Handle save_to_file -> FileSystem destination
     if binding.save_to_file {
-        let dest_id = format!("migrated_file_{}", binding_id);
+        // Determine the desired output path and normalize it to an absolute, comparable form
+        let raw_path = binding.output_path.clone().unwrap_or_else(|| {
+            // Default to Documents/UltraWhisper
+            "~/Documents/UltraWhisper".to_string()
+        });
 
-        if !storage.exists(&dest_id)? {
-            let output_path = binding.output_path.clone().unwrap_or_else(|| {
-                // Default to Documents/UltraWhisper
-                "~/Documents/UltraWhisper".to_string()
-            });
+        let normalized = normalize_path_for_compare(app, &raw_path);
 
-            let destination = Destination::with_template(
-                dest_id.clone(),
-                format!("File Output ({})", binding.name),
-                DestinationConfig::FileSystem {
-                    path: output_path,
-                    extension: "md".to_string(),
-                    filename_pattern: "transcription_{timestamp}.md".to_string(),
-                },
-                // Use a simple template that preserves existing behavior
-                "{transcription_text}".to_string(),
-            );
+        // First, attempt to find an existing FileSystem destination with the same normalized path
+        if let Some(existing_id) = find_filesystem_destination_by_normalized_path(app, storage, &normalized) {
+            debug!("Reusing existing FileSystem destination '{}' for path '{}'", existing_id, normalized);
+            dest_ids.push(existing_id);
+        } else {
+            // Create a shared, per-path destination with a stable ID
+            let stable_id = format!("file_path_{}", stable_hash8(&normalized));
 
-            storage.create(destination)?;
-            created_destinations.insert(dest_id.clone(), "file".to_string());
-            debug!("Created FileSystem destination: {}", dest_id);
+            if !storage.exists(&stable_id)? {
+                let destination = Destination::new(
+                    stable_id.clone(),
+                    format!("File Output ({})", binding.name),
+                    DestinationConfig::FileSystem {
+                        path: normalized.clone(),
+                        extension: "md".to_string(),
+                        filename_pattern: "transcription_{timestamp}.md".to_string(),
+                    },
+                );
+
+                storage.create(destination)?;
+                created_destinations.insert(stable_id.clone(), "file".to_string());
+                debug!("Created shared FileSystem destination '{}' for path '{}'", stable_id, normalized);
+            }
+
+            dest_ids.push(stable_id);
         }
-
-        dest_ids.push(dest_id);
     }
 
     // If no destinations were created, create a default active_window destination
@@ -176,6 +184,88 @@ fn create_destinations_for_binding(
     }
 
     Ok(dest_ids)
+}
+
+/// Normalize a user-provided path into an absolute, comparable string.
+/// Rules:
+/// - Expand '~' to HOME/USERPROFILE
+/// - If path starts with 'Documents' (or 'Documents/...'), prefix with system Documents directory
+/// - Remove any trailing separators
+fn normalize_path_for_compare(app: &AppHandle, path: &str) -> String {
+    use std::path::{Component, Path, PathBuf};
+
+    // Helper to expand '~'
+    fn expand_tilde(p: &str) -> String {
+        if p.starts_with("~/") || p == "~" {
+            if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+                return p.replacen("~", &home, 1);
+            }
+        }
+        p.to_string()
+    }
+
+    // Expand leading '~'
+    let mut p = expand_tilde(path);
+
+    // If path begins with 'Documents' or 'Documents/...', resolve to the system documents dir
+    let lower = p.to_lowercase();
+    if lower == "documents" || lower.starts_with("documents/") || lower.starts_with("documents\\") {
+        if let Ok(mut docs) = app.path().document_dir() {
+            // Append the remainder after 'Documents'
+            let remainder = p.trim_start_matches("Documents/")
+                             .trim_start_matches("Documents\\");
+            if !remainder.is_empty() {
+                docs = docs.join(remainder);
+            }
+            p = docs.to_string_lossy().to_string();
+        }
+    }
+
+    // Convert to Path and normalize simple components
+    let mut buf = PathBuf::new();
+    for comp in Path::new(&p).components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => { buf.pop(); }
+            other => buf.push(other.as_os_str()),
+        }
+    }
+
+    // Remove trailing separators by converting back to string
+    let mut s = buf.to_string_lossy().to_string();
+    while s.ends_with('/') || s.ends_with('\\') { s.pop(); }
+    s
+}
+
+/// Find a FileSystem destination whose path matches the given normalized absolute path
+fn find_filesystem_destination_by_normalized_path(
+    app: &AppHandle,
+    storage: &DestinationStorage,
+    normalized_path: &str,
+) -> Option<String> {
+    if let Ok(list) = storage.list() {
+        for dest in list {
+            if let DestinationConfig::FileSystem { ref path, .. } = dest.config {
+                let existing_norm = normalize_path_for_compare(app, path);
+                if existing_norm == normalized_path {
+                    return Some(dest.id);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Simple stable 64-bit FNV-1a hash, returned as the lower 8 hex chars
+fn stable_hash8(s: &str) -> String {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001B3;
+    let mut hash = FNV_OFFSET_BASIS;
+    for b in s.as_bytes() {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    format!("{:08x}", (hash & 0xFFFF_FFFF) as u32)
 }
 
 /// Clean up legacy binding configuration after successful migration
@@ -216,25 +306,23 @@ mod tests {
 
     #[test]
     fn test_check_if_migration_needed_no_legacy() {
-        let settings = AppSettings {
-            bindings: {
-                let mut map = HashMap::new();
-                map.insert(
-                    "test".to_string(),
-                    ShortcutBinding {
-                        id: "test".to_string(),
-                        name: "Test".to_string(),
-                        description: "Test".to_string(),
-                        default_binding: "Ctrl+T".to_string(),
-                        current_binding: "Ctrl+T".to_string(),
-                        paste_to_window: true,
-                        save_to_file: false,
-                        output_path: None,
-                    },
-                );
-                map
-            },
-            ..Default::default()
+        let mut settings = crate::settings::get_default_settings();
+        settings.bindings = {
+            let mut map = HashMap::new();
+            map.insert(
+                "test".to_string(),
+                ShortcutBinding {
+                    id: "test".to_string(),
+                    name: "Test".to_string(),
+                    description: "Test".to_string(),
+                    default_binding: "Ctrl+T".to_string(),
+                    current_binding: "Ctrl+T".to_string(),
+                    paste_to_window: true,
+                    save_to_file: false,
+                    output_path: None,
+                },
+            );
+            map
         };
 
         assert!(!check_if_migration_needed(&settings));
@@ -242,25 +330,23 @@ mod tests {
 
     #[test]
     fn test_check_if_migration_needed_with_save_to_file() {
-        let settings = AppSettings {
-            bindings: {
-                let mut map = HashMap::new();
-                map.insert(
-                    "test".to_string(),
-                    ShortcutBinding {
-                        id: "test".to_string(),
-                        name: "Test".to_string(),
-                        description: "Test".to_string(),
-                        default_binding: "Ctrl+T".to_string(),
-                        current_binding: "Ctrl+T".to_string(),
-                        paste_to_window: true,
-                        save_to_file: true,
-                        output_path: None,
-                    },
-                );
-                map
-            },
-            ..Default::default()
+        let mut settings = crate::settings::get_default_settings();
+        settings.bindings = {
+            let mut map = HashMap::new();
+            map.insert(
+                "test".to_string(),
+                ShortcutBinding {
+                    id: "test".to_string(),
+                    name: "Test".to_string(),
+                    description: "Test".to_string(),
+                    default_binding: "Ctrl+T".to_string(),
+                    current_binding: "Ctrl+T".to_string(),
+                    paste_to_window: true,
+                    save_to_file: true,
+                    output_path: None,
+                },
+            );
+            map
         };
 
         assert!(check_if_migration_needed(&settings));
@@ -268,25 +354,23 @@ mod tests {
 
     #[test]
     fn test_check_if_migration_needed_with_output_path() {
-        let settings = AppSettings {
-            bindings: {
-                let mut map = HashMap::new();
-                map.insert(
-                    "test".to_string(),
-                    ShortcutBinding {
-                        id: "test".to_string(),
-                        name: "Test".to_string(),
-                        description: "Test".to_string(),
-                        default_binding: "Ctrl+T".to_string(),
-                        current_binding: "Ctrl+T".to_string(),
-                        paste_to_window: true,
-                        save_to_file: false,
-                        output_path: Some("/custom/path".to_string()),
-                    },
-                );
-                map
-            },
-            ..Default::default()
+        let mut settings = crate::settings::get_default_settings();
+        settings.bindings = {
+            let mut map = HashMap::new();
+            map.insert(
+                "test".to_string(),
+                ShortcutBinding {
+                    id: "test".to_string(),
+                    name: "Test".to_string(),
+                    description: "Test".to_string(),
+                    default_binding: "Ctrl+T".to_string(),
+                    current_binding: "Ctrl+T".to_string(),
+                    paste_to_window: true,
+                    save_to_file: false,
+                    output_path: Some("/custom/path".to_string()),
+                },
+            );
+            map
         };
 
         assert!(check_if_migration_needed(&settings));
