@@ -2,6 +2,7 @@
 
 use super::destinations::{DestinationContext, DestinationResult, DestinationRouter, Metadata};
 use super::mapper::{binding_to_workflow, binding_to_workflow_with_storage};
+use super::storage::WorkflowStorage;
 use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
@@ -499,6 +500,104 @@ impl WorkflowEngine {
         Ok(ExecutionResult {
             workflow_id: workflow.id,
             text: final_transcript,
+        })
+    }
+
+    /// Execute a workflow by its ID (for workflow-based shortcuts)
+    ///
+    /// This method loads a workflow from storage, converts it to a full Workflow,
+    /// and executes it through the standard transcription pipeline.
+    ///
+    /// # Arguments
+    /// * `app` - Tauri app handle
+    /// * `workflow_id` - The workflow ID to execute
+    /// * `samples` - Audio samples to transcribe
+    pub async fn execute_workflow_by_id(
+        &self,
+        app: &AppHandle,
+        workflow_id: &str,
+        samples: Vec<f32>,
+    ) -> Result<ExecutionResult> {
+        info!("Executing workflow by ID: {}", workflow_id);
+
+        // 1. Load StoredWorkflow from storage
+        let workflow_storage = app.state::<WorkflowStorage>();
+        let stored_workflow = workflow_storage
+            .get(workflow_id)?
+            .ok_or_else(|| anyhow!("Workflow '{}' not found", workflow_id))?;
+
+        debug!("Loaded stored workflow: {}", stored_workflow.name);
+
+        // 2. Convert to full Workflow
+        let workflow = stored_workflow.to_full_workflow();
+        debug!("Converted to full workflow: {}", workflow.name);
+
+        // 3. Ensure model is loaded
+        debug!("Loading model: {}", workflow.model_config.model_id);
+        let model_handle = self
+            .model_pool
+            .get_or_load(&workflow.model_config.model_id)
+            .await
+            .map_err(|e| anyhow!("Failed to load model: {}", e))?;
+
+        // 4. Transcribe audio
+        debug!("Transcribing {} audio samples", samples.len());
+        let text = model_handle
+            .transcribe(samples.clone())
+            .await
+            .map_err(|e| anyhow!("Transcription failed: {}", e))?;
+
+        info!("Transcription complete: {} characters", text.len());
+
+        // 5. Match legacy parity: if transcription is empty, skip history and destinations
+        if text.trim().is_empty() {
+            debug!("Empty transcription; skipping history save and destination routing");
+        } else {
+            // Save to history with workflow tracking
+            let hm = app.state::<Arc<HistoryManager>>();
+            hm.save_transcription(
+                samples,
+                text.clone(),
+                Some(&workflow.id),
+                Some(&workflow.name),
+            )
+            .await
+            .map_err(|e| {
+                error!("Failed to save to history: {}", e);
+                anyhow!("History save failed: {}", e)
+            })?;
+
+            debug!("Saved to history with workflow_id: {}", workflow.id);
+
+            // 6. Route to destinations
+            let router = self.build_router(app, &workflow)?;
+            let ctx = DestinationContext {
+                app,
+                output_base: workflow.audio_processing.save_path.clone(),
+                audio_path: None,
+            };
+            let metadata = self.build_metadata(&workflow);
+
+            let results = router.route(&ctx, &text, &metadata).await?;
+
+            // Log destination results (but don't fail the overall operation)
+            for (idx, result) in results.iter().enumerate() {
+                match result {
+                    DestinationResult::Success => {
+                        debug!("Destination {} succeeded", idx + 1);
+                    }
+                    DestinationResult::Failed(err) => {
+                        error!("Destination {} failed: {}", idx + 1, err);
+                    }
+                }
+            }
+        }
+
+        info!("Workflow execution complete for: {}", workflow.id);
+
+        Ok(ExecutionResult {
+            workflow_id: workflow.id,
+            text,
         })
     }
 }

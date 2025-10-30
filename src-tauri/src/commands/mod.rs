@@ -7,6 +7,7 @@ pub mod models;
 pub mod settings;
 pub mod telegram;
 pub mod transcription;
+pub mod workflows;
 
 use crate::utils::cancel_current_operation;
 use tauri::{AppHandle, Manager};

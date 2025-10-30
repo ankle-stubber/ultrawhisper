@@ -2,20 +2,34 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use std::sync::Arc;
+use log::{debug, error, info, warn};
 
 use crate::actions::ACTION_MAP;
+use crate::audio_feedback::{SoundType, play_feedback_sound};
+use crate::managers::audio::AudioRecordingManager;
+use crate::overlay::{show_recording_overlay, show_transcribing_overlay};
 use crate::settings::ShortcutBinding;
 use crate::settings::{self, get_settings, ClipboardHandling, OverlayPosition, PasteMethod, SoundTheme};
+use crate::tray::{change_tray_icon, TrayIconState};
+use crate::utils;
+use crate::workflow::{WorkflowStorage, types::TriggerConfig};
 use crate::ManagedToggleState;
 
 pub fn init_shortcuts(app: &AppHandle) {
     let settings = settings::load_or_create_app_settings(app);
 
-    // Register shortcuts with the bindings from settings
+    // Register legacy bindings first
     for (_id, binding) in settings.bindings {
         if let Err(e) = _register_shortcut(app, binding) {
             eprintln!("Failed to register shortcut {} during init: {}", _id, e);
         }
+    }
+
+    // Then register workflow hotkeys (if flag enabled)
+    let registered = register_workflow_shortcuts(app);
+    if !registered.is_empty() {
+        info!("Registered {} workflow hotkey(s)", registered.len());
     }
 }
 
@@ -467,4 +481,246 @@ fn _unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(),
     })?;
 
     Ok(())
+}
+
+// ========== Workflow Shortcut Registration ==========
+
+/// Register workflow hotkeys (separate from legacy bindings)
+/// Returns list of successfully registered workflow IDs
+pub fn register_workflow_shortcuts(app: &AppHandle) -> Vec<String> {
+    let settings = get_settings(app);
+
+    // Gate behind flag
+    if !settings.use_workflow_engine {
+        debug!("Workflow engine disabled, skipping workflow shortcut registration");
+        return vec![];
+    }
+
+    let workflow_storage = match app.try_state::<WorkflowStorage>() {
+        Some(storage) => storage,
+        None => {
+            warn!("WorkflowStorage not initialized, skipping workflow shortcut registration");
+            return vec![];
+        }
+    };
+
+    let workflows = match workflow_storage.list() {
+        Ok(wfs) => wfs,
+        Err(e) => {
+            error!("Failed to list workflows: {}", e);
+            return vec![];
+        }
+    };
+
+    let mut registered = Vec::new();
+    let mut collisions = Vec::new();
+
+    for workflow in workflows {
+        if !workflow.enabled {
+            continue;
+        }
+
+        if let TriggerConfig::Hotkey { binding, push_to_talk } = &workflow.trigger {
+            // Check if binding already registered (collision with legacy)
+            if is_shortcut_registered(app, binding) {
+                collisions.push((workflow.id.clone(), binding.clone()));
+                continue; // Skip, legacy wins for now
+            }
+
+            // Register with closure that calls workflow execution
+            match register_workflow_shortcut(app, &workflow.id, binding, *push_to_talk) {
+                Ok(_) => {
+                    registered.push(workflow.id.clone());
+                    debug!("Registered workflow hotkey: {} -> {}", workflow.name, binding);
+                }
+                Err(e) => {
+                    error!("Failed to register workflow {}: {}", workflow.id, e);
+                }
+            }
+        }
+    }
+
+    if !collisions.is_empty() {
+        warn!(
+            "Workflow hotkey collisions detected (legacy bindings take precedence): {:?}",
+            collisions
+        );
+    }
+
+    registered
+}
+
+/// Check if a shortcut is already registered
+fn is_shortcut_registered(app: &AppHandle, binding: &str) -> bool {
+    match binding.parse::<Shortcut>() {
+        Ok(shortcut) => app.global_shortcut().is_registered(shortcut),
+        Err(_) => false,
+    }
+}
+
+/// Register a single workflow shortcut
+fn register_workflow_shortcut(
+    app: &AppHandle,
+    workflow_id: &str,
+    binding: &str,
+    push_to_talk: bool,
+) -> Result<(), String> {
+    let shortcut = binding
+        .parse::<Shortcut>()
+        .map_err(|e| format!("Invalid shortcut: {}", e))?;
+
+    let workflow_id = workflow_id.to_string();
+    let app_clone = app.clone();
+
+    app.global_shortcut()
+        .on_shortcut(shortcut, move |ah, scut, event| {
+            if scut == &shortcut {
+                if push_to_talk {
+                    if event.state == ShortcutState::Pressed {
+                        start_workflow_recording(ah, &workflow_id);
+                    } else if event.state == ShortcutState::Released {
+                        stop_and_execute_workflow(ah, &workflow_id);
+                    }
+                } else {
+                    if event.state == ShortcutState::Pressed {
+                        toggle_workflow_recording(ah, &workflow_id);
+                    }
+                }
+            }
+        })
+        .map_err(|e| format!("Registration failed: {}", e))?;
+
+    Ok(())
+}
+
+/// Re-register workflows on change
+pub fn refresh_workflow_shortcuts(app: &AppHandle) {
+    debug!("Refreshing workflow shortcuts");
+    unregister_all_workflow_shortcuts(app);
+    register_workflow_shortcuts(app);
+}
+
+/// Unregister all workflow shortcuts
+fn unregister_all_workflow_shortcuts(app: &AppHandle) {
+    let workflow_storage = match app.try_state::<WorkflowStorage>() {
+        Some(storage) => storage,
+        None => return,
+    };
+
+    let workflows = match workflow_storage.list() {
+        Ok(wfs) => wfs,
+        Err(_) => return,
+    };
+
+    for workflow in workflows {
+        if let TriggerConfig::Hotkey { binding, .. } = &workflow.trigger {
+            if let Ok(shortcut) = binding.parse::<Shortcut>() {
+                let _ = app.global_shortcut().unregister(shortcut);
+            }
+        }
+    }
+}
+
+/// Start workflow recording (for push-to-talk or toggle mode)
+fn start_workflow_recording(app: &AppHandle, workflow_id: &str) {
+    debug!("Starting workflow recording: {}", workflow_id);
+
+    let settings = get_settings(app);
+    let is_always_on = settings.always_on_microphone;
+
+    change_tray_icon(app, TrayIconState::Recording);
+    show_recording_overlay(app);
+
+    let rm = app.state::<Arc<AudioRecordingManager>>();
+
+    // For MVP, use batch (non-streaming) mode
+    if is_always_on {
+        play_feedback_sound(app, SoundType::Start);
+        let recording_started = rm.try_start_recording(workflow_id);
+        debug!("Recording started: {}", recording_started);
+    } else {
+        if rm.try_start_recording(workflow_id) {
+            // Small delay to ensure microphone stream is active
+            let app_clone = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                play_feedback_sound(&app_clone, SoundType::Start);
+            });
+        } else {
+            debug!("Failed to start recording");
+        }
+    }
+}
+
+/// Stop recording and execute workflow
+fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
+    debug!("Stopping workflow recording: {}", workflow_id);
+
+    let ah = app.clone();
+    let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
+    let workflow_id = workflow_id.to_string();
+
+    change_tray_icon(app, TrayIconState::Transcribing);
+    show_transcribing_overlay(app);
+    play_feedback_sound(app, SoundType::Stop);
+
+    // Stop recording and get samples
+    tauri::async_runtime::spawn(async move {
+        match rm.stop_recording(&workflow_id) {
+            Some(samples) => {
+                debug!("Got {} samples from recording", samples.len());
+
+                // Execute workflow via WorkflowEngine
+                let workflow_engine = ah.state::<Arc<crate::workflow::WorkflowEngine>>();
+                match workflow_engine
+                    .execute_workflow_by_id(&ah, &workflow_id, samples)
+                    .await
+                {
+                    Ok(result) => {
+                        info!("Workflow execution complete: {} characters", result.text.len());
+                    }
+                    Err(e) => {
+                        error!("Workflow execution failed: {}", e);
+                    }
+                }
+            }
+            None => {
+                error!("Failed to stop recording: no samples returned");
+            }
+        }
+
+        // Cleanup UI
+        utils::hide_recording_overlay(&ah);
+        change_tray_icon(&ah, TrayIconState::Idle);
+    });
+}
+
+/// Toggle workflow recording (for non-push-to-talk mode)
+fn toggle_workflow_recording(app: &AppHandle, workflow_id: &str) {
+    let toggle_state_manager = app.state::<ManagedToggleState>();
+    let mut states = toggle_state_manager
+        .lock()
+        .expect("Failed to lock toggle state manager");
+
+    let is_currently_active = states
+        .active_toggles
+        .entry(workflow_id.to_string())
+        .or_insert(false);
+
+    if *is_currently_active {
+        debug!("Toggle: stopping workflow recording");
+        drop(states); // Release lock before calling stop
+        stop_and_execute_workflow(app, workflow_id);
+
+        // Re-acquire lock to update state
+        let mut states = toggle_state_manager
+            .lock()
+            .expect("Failed to lock toggle state manager");
+        states.active_toggles.insert(workflow_id.to_string(), false);
+    } else {
+        debug!("Toggle: starting workflow recording");
+        *is_currently_active = true;
+        drop(states); // Release lock before calling start
+        start_workflow_recording(app, workflow_id);
+    }
 }

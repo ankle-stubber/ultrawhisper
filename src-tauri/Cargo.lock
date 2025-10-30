@@ -7110,6 +7110,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "transcribe-rs",
+ "uuid",
  "vad-rs",
 ]
 
