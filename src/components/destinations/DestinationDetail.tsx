@@ -2,13 +2,19 @@ import React, { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { TelegramSetup } from "./TelegramSetup";
+import FileSystemSetup from "./FileSystemSetup";
+import ActiveWindowSetup from "./ActiveWindowSetup";
+import { SettingsGroup } from "../ui/SettingsGroup";
+import { SettingContainer } from "../ui/SettingContainer";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/Button";
 
 interface DestinationDetailProps {
   destinationId: string | null;
 }
 
 type DestinationConfig =
-  | { type: "active_window"; paste_method: string; preserve_clipboard: boolean }
+  | { type: "active_window"; paste_method: "ctrl_v" | "direct"; preserve_clipboard: boolean }
   | { type: "file_system"; path: string; extension: string; filename_pattern: string }
   | { type: "telegram"; credential_id: string; chat_id: string; include_audio: boolean };
 
@@ -22,6 +28,11 @@ interface DestinationEntity {
 export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinationId }) => {
   const [loading, setLoading] = useState(false);
   const [dest, setDest] = useState<DestinationEntity | null>(null);
+
+  // Name editing state
+  const [name, setName] = useState("");
+  const [originalName, setOriginalName] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
 
   const load = useCallback(async (id: string) => {
     setLoading(true);
@@ -45,6 +56,15 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
     }
   }, [destinationId, load]);
 
+  // Update name state when destination changes
+  useEffect(() => {
+    if (dest) {
+      setName(dest.name);
+      setOriginalName(dest.name);
+    }
+  }, [dest?.id, dest?.name]);
+
+  // Early returns for loading states
   if (!destinationId) {
     return (
       <div className="flex items-center justify-center h-full text-mid-gray">
@@ -69,44 +89,142 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
     );
   }
 
-  if (dest.config.type === "telegram") {
-    const credId = dest.config.credential_id || "telegram_default";
-    const chatId = dest.config.chat_id || "";
+  // Computed values
+  const isNameDirty = name.trim() !== originalName;
 
-    const handleSave = async (newChatId: string) => {
-      try {
-        const updated: DestinationEntity = {
-          ...dest,
-          config: { ...dest.config, chat_id: newChatId } as DestinationConfig,
-        };
-        await invoke("update_destination", { destination: updated });
-        toast.success("Telegram destination updated");
-        setDest(updated);
-      } catch (e: any) {
-        const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
-        toast.error(`Failed to update destination: ${msg}`);
-      }
-    };
+  // Name save handlers
+  const handleSaveName = async () => {
+    setIsSavingName(true);
+    try {
+      const updated: DestinationEntity = {
+        ...dest,
+        name: name.trim(),
+      };
+      await invoke("update_destination", { destination: updated });
+      toast.success("Destination renamed");
+      setDest(updated);
+      setOriginalName(name.trim());
 
-    return (
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center p-4 gap-4">
-          <TelegramSetup
-            credentialId={credId}
-            initialChatId={chatId}
-            onSave={handleSave}
-          />
-        </div>
-      </div>
-    );
-  }
+      // Notify other views
+      window.dispatchEvent(new CustomEvent("destinations-changed"));
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
+      toast.error(`Failed to rename: ${msg}`);
+    } finally {
+      setIsSavingName(false);
+    }
+  };
 
-  // Placeholder for other destination types
+  const handleRevertName = () => {
+    setName(originalName);
+  };
+
+  // Type-specific save handlers
+  const handleSaveTelegram = async (newChatId: string) => {
+    try {
+      const updated: DestinationEntity = {
+        ...dest,
+        config: { ...dest.config, chat_id: newChatId } as DestinationConfig,
+      };
+      await invoke("update_destination", { destination: updated });
+      toast.success("Telegram destination updated");
+      setDest(updated);
+      window.dispatchEvent(new CustomEvent("destinations-changed"));
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
+      toast.error(`Failed to update destination: ${msg}`);
+    }
+  };
+
+  const handleSaveFileSystem = async (newConfig: typeof dest.config) => {
+    try {
+      const updated: DestinationEntity = {
+        ...dest,
+        config: newConfig,
+      };
+      await invoke("update_destination", { destination: updated });
+      toast.success("File System destination updated");
+      setDest(updated);
+      window.dispatchEvent(new CustomEvent("destinations-changed"));
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
+      toast.error(`Failed to update destination: ${msg}`);
+    }
+  };
+
+  const handleSaveActiveWindow = async (newConfig: typeof dest.config) => {
+    try {
+      const updated: DestinationEntity = {
+        ...dest,
+        config: newConfig,
+      };
+      await invoke("update_destination", { destination: updated });
+      toast.success("Active Window destination updated");
+      setDest(updated);
+      window.dispatchEvent(new CustomEvent("destinations-changed"));
+    } catch (e: any) {
+      const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
+      toast.error(`Failed to update destination: ${msg}`);
+    }
+  };
+
+  // Single return with General section + type-specific editor
   return (
-    <div className="flex items-center justify-center h-full text-mid-gray">
-      <div className="p-4 text-center">
-        <p className="text-sm font-medium">{dest.name}</p>
-        <p className="text-xs text-mid-gray mt-1">Editing for this destination type coming soon</p>
+    <div className="flex-1 overflow-y-auto">
+      <div className="flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto">
+        {/* General Section - always rendered */}
+        <SettingsGroup title="GENERAL" description="Basic destination information">
+          <SettingContainer
+            title="Name"
+            description="Label shown in lists and pickers"
+            layout="stacked"
+            descriptionMode="inline"
+            grouped
+          >
+            <Input
+              value={name}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+              placeholder="My Destination"
+              disabled={isSavingName}
+              className="w-full"
+            />
+            <div className="flex gap-2 justify-end mt-2">
+              <Button
+                variant="secondary"
+                onClick={handleRevertName}
+                disabled={!isNameDirty || isSavingName}
+                size="sm"
+              >
+                Revert
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveName}
+                disabled={!isNameDirty || !name.trim() || isSavingName}
+                size="sm"
+              >
+                {isSavingName ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </SettingContainer>
+        </SettingsGroup>
+
+        {/* Type-specific editor */}
+        {dest.config.type === "telegram" && (
+          <TelegramSetup
+            credentialId={dest.config.credential_id || "telegram_default"}
+            initialChatId={dest.config.chat_id || ""}
+            onSave={handleSaveTelegram}
+          />
+        )}
+
+        {dest.config.type === "file_system" && (
+          <FileSystemSetup config={dest.config} onSave={handleSaveFileSystem} />
+        )}
+
+        {dest.config.type === "active_window" && (
+          <ActiveWindowSetup config={dest.config} onSave={handleSaveActiveWindow} />
+        )}
       </div>
     </div>
   );
