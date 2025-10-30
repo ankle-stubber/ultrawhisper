@@ -523,6 +523,11 @@ fn expand_tilde_str(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+
+    // Prevent concurrent env var mutation across tests
+    static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     #[test]
     fn test_execution_result() {
@@ -537,6 +542,7 @@ mod tests {
 
     #[test]
     fn test_expand_tilde_uses_home() {
+        let _g = ENV_LOCK.lock().unwrap();
         // Save and set env
         let original_home = env::var("HOME").ok();
         let _ = env::remove_var("USERPROFILE");
@@ -551,6 +557,7 @@ mod tests {
 
     #[test]
     fn test_expand_tilde_uses_userprofile_when_home_missing() {
+        let _g = ENV_LOCK.lock().unwrap();
         // Save and adjust env
         let original_home = env::var("HOME").ok();
         let original_up = env::var("USERPROFILE").ok();

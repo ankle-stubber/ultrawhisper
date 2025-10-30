@@ -111,31 +111,43 @@ export default function BatchProcessingSettings() {
 
   const handleAddFolder = useCallback(async () => {
     // Temporarily using text input instead of folder picker
-    if (!newFolder.trim()) {
+    const folder = newFolder.trim();
+    if (!folder) {
       toast.error("Please enter a folder path");
       return;
     }
 
-    if (batchSettings.watch_folders.includes(newFolder)) {
-      toast.info("Folder already in watch list");
-      return;
-    }
+    try {
+      // Validate folder path via backend (exists + permissions)
+      const ok = await invoke<boolean>("validate_watch_folder", { folderPath: folder });
+      if (!ok) {
+        toast.error("Folder validation failed");
+        return;
+      }
 
-    const updatedFolders = [...batchSettings.watch_folders, newFolder];
-    await updateBatchSettings({ watch_folders: updatedFolders });
-    setNewFolder("");
-    toast.success("Folder added to watch list");
-  }, [newFolder, batchSettings.watch_folders, updateBatchSettings]);
+      // Add via backend so normalization/dedup logic applies
+      await invoke("add_watch_folder", { folderPath: folder });
+      await refreshSettings();
+      setNewFolder("");
+      toast.success("Folder added to watch list");
+    } catch (error: any) {
+      const msg = typeof error === "string" ? error : (error?.toString?.() || "Unknown error");
+      toast.error(`Failed to add folder: ${msg}`);
+    }
+  }, [newFolder, refreshSettings]);
 
   const handleRemoveFolder = useCallback(
     async (folderPath: string) => {
-      const updatedFolders = batchSettings.watch_folders.filter(
-        (f) => f !== folderPath
-      );
-      await updateBatchSettings({ watch_folders: updatedFolders });
-      toast.success("Folder removed from watch list");
+      try {
+        await invoke("remove_watch_folder", { folderPath });
+        await refreshSettings();
+        toast.success("Folder removed from watch list");
+      } catch (error: any) {
+        const msg = typeof error === "string" ? error : (error?.toString?.() || "Unknown error");
+        toast.error(`Failed to remove folder: ${msg}`);
+      }
     },
-    [batchSettings.watch_folders, updateBatchSettings]
+    [refreshSettings]
   );
 
   const handleProcessNow = useCallback(async () => {
@@ -307,14 +319,20 @@ export default function BatchProcessingSettings() {
                 : "dark:border-gray-700"
             }`}
             value={batchSettings.file_patterns?.join(", ") || "*.wav"}
-            onChange={(e) => {
+            onChange={async (e) => {
               const result = validateAndNormalizePatterns(e.target.value);
 
-              if (result.valid) {
-                setPatternError(null);
-                updateBatchSettings({ file_patterns: result.patterns });
-              } else {
+              if (!result.valid) {
                 setPatternError(result.error || "Invalid pattern");
+                return;
+              }
+              setPatternError(null);
+              try {
+                await invoke("set_file_patterns", { patterns: result.patterns });
+                await refreshSettings();
+              } catch (err: any) {
+                const msg = typeof err === "string" ? err : (err?.toString?.() || "Failed to update patterns");
+                setPatternError(msg);
               }
             }}
             onBlur={() => {
