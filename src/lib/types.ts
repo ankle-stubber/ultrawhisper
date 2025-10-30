@@ -179,3 +179,39 @@ export const LogFilterSchema = z.object({
 export type LogFilter = z.infer<typeof LogFilterSchema>;
 
 export type Category = "workflows" | "destinations" | "models" | "history" | "logs";
+
+// Workflow types (Bundle 7)
+export const TriggerConfigSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("Hotkey"),
+    binding: z.string(),
+    push_to_talk: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("FolderWatch"),
+    paths: z.array(z.string()),
+    file_patterns: z.array(z.string()),
+    interval_seconds: z.number(),
+    stability_timeout_seconds: z.number(),
+  }),
+]);
+
+export const ModelConfigDtoSchema = z.object({
+  model_id: z.string(),
+  language: z.string(),
+  translate_to_english: z.boolean(),
+});
+
+export const StoredWorkflowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  trigger: TriggerConfigSchema,
+  model: ModelConfigDtoSchema,
+  destination_ids: z.array(z.string()),
+  notes: z.string().optional(),
+});
+
+export type TriggerConfig = z.infer<typeof TriggerConfigSchema>;
+export type ModelConfigDto = z.infer<typeof ModelConfigDtoSchema>;
+export type StoredWorkflow = z.infer<typeof StoredWorkflowSchema>;

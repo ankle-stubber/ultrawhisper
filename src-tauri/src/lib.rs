@@ -232,14 +232,29 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     let _ = crate::destinations::migrate_legacy_bindings_if_needed(app_handle, &dest_storage);
     app_handle.manage(dest_storage.clone());
 
+    // Initialize workflow storage and seed legacy batch workflow if needed (Bundle 7)
+    let workflow_storage = crate::workflow::WorkflowStorage::new(app_handle.clone())
+        .expect("Failed to initialize workflow storage");
+    let _ = crate::workflow::seed_legacy_batch_workflow_if_needed(app_handle, &workflow_storage);
+    let workflows = workflow_storage.list().unwrap_or_default();
+    log::info!("Loaded {} workflow(s)", workflows.len());
+    app_handle.manage(workflow_storage.clone());
+
     // Initialize workflow architecture components (Phase 0)
     let model_pool = Arc::new(model_pool::ModelPool::new(Arc::clone(&transcription_manager)));
     let workflow_engine = Arc::new(workflow::WorkflowEngine::new(Arc::clone(&model_pool)));
     app_handle.manage(model_pool);
     app_handle.manage(workflow_engine);
 
-    // Initialize the shortcuts
+    // Initialize the shortcuts (includes workflow hotkeys if enabled)
     shortcut::init_shortcuts(app_handle);
+
+    // Listen for workflow changes and refresh shortcuts (Bundle 7)
+    let app_clone = app_handle.clone();
+    app_handle.listen("workflows-changed", move |_event| {
+        log::debug!("Workflows changed, refreshing shortcuts");
+        shortcut::refresh_workflow_shortcuts(&app_clone);
+    });
 
     // Apply macOS Accessory policy if starting hidden
     #[cfg(target_os = "macos")]
@@ -464,7 +479,11 @@ pub fn run() {
             commands::destinations::get_destination,
             commands::destinations::update_destination,
             commands::destinations::create_destination,
-            commands::destinations::delete_destination
+            commands::destinations::delete_destination,
+            commands::workflows::list_workflows,
+            commands::workflows::get_workflow,
+            commands::workflows::upsert_workflow,
+            commands::workflows::delete_workflow
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
