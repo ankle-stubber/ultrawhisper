@@ -19,10 +19,11 @@ import { LogsList } from "./components/logs/LogsList";
 import { LogsDetail } from "./components/logs/LogsDetail";
 import { Category } from "./lib/types";
 import { useSettings } from "./hooks/useSettings";
+import { useNavigationStore } from "./stores/navigationStore";
 
 function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
-  const [activeCategory, setActiveCategory] = useState<Category>("workflows");
+  const { activeCategory, setActiveCategory } = useNavigationStore();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const { settings, updateSetting } = useSettings();
 
@@ -147,9 +148,9 @@ function App() {
   // Render detail panel based on active category
   const renderDetailPanel = () => {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex flex-col p-4 gap-4">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+        <div className="flex-1 overflow-y-auto w-full">
+          <div className="flex flex-col p-4 gap-4 w-full">
             <AccessibilityPermissions />
             {activeCategory === "workflows" && (
               <WorkflowDetail workflowId={selectedItemId} />

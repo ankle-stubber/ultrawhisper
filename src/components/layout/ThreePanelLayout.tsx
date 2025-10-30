@@ -31,7 +31,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
       </div>
 
       {/* Right: Detail Panel (flex-1) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         {detailPanel}
       </div>
     </div>

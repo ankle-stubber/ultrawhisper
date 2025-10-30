@@ -17,7 +17,7 @@ export const WorkflowDetail: React.FC<WorkflowDetailProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 min-w-0 w-full">
       <WorkflowEditor workflowId={workflowId} />
     </div>
   );
