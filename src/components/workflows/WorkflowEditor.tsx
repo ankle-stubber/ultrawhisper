@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { StoredWorkflow, ModelInfo, TriggerConfig } from "../../lib/types";
 import { Destination } from "../../lib/types";
 import { useSettings } from "../../hooks/useSettings";
+import { useNavigationStore } from "../../stores/navigationStore";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { ToggleSwitch } from "../ui/ToggleSwitch";
+import { BareToggle } from "../ui/BareToggle";
 import { SettingContainer } from "../ui/SettingContainer";
 import { SettingsGroup } from "../ui/SettingsGroup";
 
@@ -37,6 +38,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
   const [isLoading, setIsLoading] = useState(true);
 
   const { settings } = useSettings();
+  const { setActiveCategory } = useNavigationStore();
 
   // Load workflow and dependencies on mount
   const loadWorkflow = useCallback(async () => {
@@ -477,36 +479,40 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
     models.find((m) => m.id === formData.model.model_id);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+    <div className="flex flex-col h-full min-w-0 min-h-0 w-full">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 w-full min-w-0 max-w-full">
         {/* General Section */}
         <SettingsGroup title="General">
           <SettingContainer
-            label="Name"
+            title="Name"
             description="Descriptive name for this workflow"
+            layout="stacked"
             error={validationErrors.name}
           >
             <Input
               value={formData.name}
               onChange={(e) => updateField("name", e.target.value)}
               placeholder="Quick Capture"
-              className={validationErrors.name ? "border-red-500" : ""}
+              className={`w-full ${validationErrors.name ? "border-red-500" : ""}`}
             />
           </SettingContainer>
 
           <SettingContainer
-            label="Enabled"
+            title="Enabled"
             description="Workflow is active and can be triggered"
+            layout="stacked"
+            descriptionMode="inline"
           >
-            <ToggleSwitch
+            <BareToggle
               checked={formData.enabled}
-              onCheckedChange={(checked) => updateField("enabled", checked)}
+              onChange={(checked) => updateField("enabled", checked)}
             />
           </SettingContainer>
 
           <SettingContainer
-            label="Notes"
+            title="Notes"
             description="Optional description or notes"
+            layout="stacked"
           >
             <textarea
               value={formData.notes || ""}
@@ -521,8 +527,9 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         {/* Trigger Section */}
         <SettingsGroup title="Trigger">
           <SettingContainer
-            label="Type"
+            title="Type"
             description="How this workflow is triggered"
+            layout="stacked"
           >
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -549,25 +556,28 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           {formData.trigger.type === "Hotkey" && (
             <>
               <SettingContainer
-                label="Binding"
+                title="Binding"
                 description="Keyboard shortcut (e.g., cmd+shift+s)"
+                layout="stacked"
                 error={validationErrors.binding}
               >
                 <Input
                   value={formData.trigger.binding}
                   onChange={(e) => updateTriggerField("binding", e.target.value)}
                   placeholder="cmd+shift+s"
-                  className={validationErrors.binding ? "border-red-500" : ""}
+                  className={`w-full ${validationErrors.binding ? "border-red-500" : ""}`}
                 />
               </SettingContainer>
 
               <SettingContainer
-                label="Push to Talk"
+                title="Push to Talk"
                 description="Hold key to record, release to stop"
+                layout="stacked"
+                descriptionMode="inline"
               >
-                <ToggleSwitch
+                <BareToggle
                   checked={formData.trigger.push_to_talk}
-                  onCheckedChange={(checked) =>
+                  onChange={(checked) =>
                     updateTriggerField("push_to_talk", checked)
                   }
                 />
@@ -575,31 +585,34 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             </>
           )}
 
-          {formData.trigger.type === "FolderWatch" && (
+          {formData.trigger.type === "FolderWatch" && (() => {
+            const trigger = formData.trigger as Extract<TriggerConfig, { type: "FolderWatch" }>;
+            return (
             <>
               <SettingContainer
-                label="Watch Folders"
+                title="Watch Folders"
                 description="Paths to monitor for new audio files"
+                layout="stacked"
                 error={validationErrors.paths}
               >
                 <div className="space-y-2">
-                  {formData.trigger.paths.map((path, index) => (
+                  {trigger.paths.map((path, index) => (
                     <div key={index} className="flex gap-2">
                       <Input
                         value={path}
                         onChange={(e) => {
-                          const newPaths = [...formData.trigger.paths];
+                          const newPaths = [...trigger.paths];
                           newPaths[index] = e.target.value;
                           updateTriggerField("paths", newPaths);
                         }}
                         placeholder="/path/to/folder"
-                        className="flex-1"
+                        className="flex-1 w-full"
                       />
                       <Button
                         variant="secondary"
                         onClick={() => {
-                          const newPaths = formData.trigger.paths.filter(
-                            (_, i) => i !== index
+                          const newPaths = trigger.paths.filter(
+                            (_: string, i: number) => i !== index
                           );
                           updateTriggerField("paths", newPaths);
                         }}
@@ -612,7 +625,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                     variant="secondary"
                     onClick={() => {
                       updateTriggerField("paths", [
-                        ...formData.trigger.paths,
+                        ...trigger.paths,
                         "",
                       ]);
                     }}
@@ -623,8 +636,9 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               </SettingContainer>
 
               <SettingContainer
-                label="File Patterns"
+                title="File Patterns"
                 description="Comma-separated (e.g., *.wav, *.mp3)"
+                layout="stacked"
                 error={validationErrors.patterns}
               >
                 <Input
@@ -633,13 +647,14 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                     updateTriggerField("file_patterns", parsePatterns(e.target.value))
                   }
                   placeholder="*.wav, *.mp3, *.m4a"
-                  className={validationErrors.patterns ? "border-red-500" : ""}
+                  className={`w-full ${validationErrors.patterns ? "border-red-500" : ""}`}
                 />
               </SettingContainer>
 
               <SettingContainer
-                label="Check Interval"
+                title="Check Interval"
                 description="Seconds between checks (min: 10)"
+                layout="stacked"
                 error={validationErrors.interval}
               >
                 <Input
@@ -652,13 +667,14 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                       parseInt(e.target.value) || 10
                     )
                   }
-                  className={validationErrors.interval ? "border-red-500" : ""}
+                  className={`w-full ${validationErrors.interval ? "border-red-500" : ""}`}
                 />
               </SettingContainer>
 
               <SettingContainer
-                label="Stability Timeout"
+                title="Stability Timeout"
                 description="Seconds to wait for file to stabilize (min: 1)"
+                layout="stacked"
                 error={validationErrors.stability}
               >
                 <Input
@@ -671,24 +687,29 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                       parseInt(e.target.value) || 1
                     )
                   }
-                  className={validationErrors.stability ? "border-red-500" : ""}
+                  className={`w-full ${validationErrors.stability ? "border-red-500" : ""}`}
                 />
               </SettingContainer>
             </>
-          )}
+            );
+          })()}
         </SettingsGroup>
 
         {/* Model Section */}
         <SettingsGroup title="Model">
           <SettingContainer
-            label="Model"
+            title="Model"
             description="Whisper model for transcription"
+            layout="stacked"
             error={validationErrors.model}
           >
             {downloadedModels.length === 0 && !currentModelInList ? (
               <div className="text-sm text-mid-gray">
                 No models available.{" "}
-                <button className="text-logo-primary hover:underline">
+                <button
+                  onClick={() => setActiveCategory("models")}
+                  className="text-logo-primary hover:underline"
+                >
                   Manage Models →
                 </button>
               </div>
@@ -714,8 +735,9 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           </SettingContainer>
 
           <SettingContainer
-            label="Language"
+            title="Language"
             description="Input language for transcription"
+            layout="stacked"
           >
             <select
               value={formData.model.language}
@@ -735,12 +757,14 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           </SettingContainer>
 
           <SettingContainer
-            label="Translate to English"
+            title="Translate to English"
             description="Force output to English"
+            layout="stacked"
+            descriptionMode="inline"
           >
-            <ToggleSwitch
+            <BareToggle
               checked={formData.model.translate_to_english}
-              onCheckedChange={(checked) =>
+              onChange={(checked) =>
                 updateModelField("translate_to_english", checked)
               }
             />
@@ -750,14 +774,18 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
         {/* Destinations Section */}
         <SettingsGroup title="Destinations">
           <SettingContainer
-            label="Output Destinations"
+            title="Output Destinations"
             description="Where to send transcribed text"
+            layout="stacked"
             error={validationErrors.destinations}
           >
             {destinations.length === 0 ? (
               <div className="text-sm text-mid-gray">
                 No destinations available.{" "}
-                <button className="text-logo-primary hover:underline">
+                <button
+                  onClick={() => setActiveCategory("destinations")}
+                  className="text-logo-primary hover:underline"
+                >
                   Open Destinations →
                 </button>
               </div>

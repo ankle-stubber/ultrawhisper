@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 
 interface SettingContainerProps {
-  title: string;
+  title?: string;
   description: string;
   children: React.ReactNode;
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
   layout?: "horizontal" | "stacked";
   disabled?: boolean;
+  error?: string;
+  label?: string; // Deprecated fallback for backward compatibility
 }
 
 export const SettingContainer: React.FC<SettingContainerProps> = ({
@@ -18,7 +20,10 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   grouped = false,
   layout = "horizontal",
   disabled = false,
+  error,
+  label,
 }) => {
+  const heading = title ?? label ?? "";
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +61,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
             <h3
               className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}
             >
-              {title}
+              {heading}
             </h3>
             <div
               ref={tooltipRef}
@@ -98,6 +103,11 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
             </div>
           </div>
           <div className="w-full">{children}</div>
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+              {error}
+            </p>
+          )}
         </div>
       );
     }
@@ -106,13 +116,18 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
       <div className={containerClasses}>
         <div className="mb-2">
           <h3 className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>
-            {title}
+            {heading}
           </h3>
           <p className={`text-sm ${disabled ? "opacity-50" : ""}`}>
             {description}
           </p>
         </div>
         <div className="w-full">{children}</div>
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -125,12 +140,12 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   if (descriptionMode === "tooltip") {
     return (
       <div className={horizontalContainerClasses}>
-        <div className="max-w-2/3">
+        <div className="max-w-[66%]">
           <div className="flex items-center gap-2">
             <h3
               className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}
             >
-              {title}
+              {heading}
             </h3>
             <div
               ref={tooltipRef}
@@ -171,6 +186,11 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
               )}
             </div>
           </div>
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+              {error}
+            </p>
+          )}
         </div>
         <div className="relative">{children}</div>
       </div>
@@ -179,13 +199,18 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
 
   return (
     <div className={horizontalContainerClasses}>
-      <div className="max-w-2/3">
+      <div className="max-w-[66%]">
         <h3 className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>
-          {title}
+          {heading}
         </h3>
         <p className={`text-sm ${disabled ? "opacity-50" : ""}`}>
           {description}
         </p>
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            {error}
+          </p>
+        )}
       </div>
       <div className="relative">{children}</div>
     </div>
