@@ -666,8 +666,8 @@ fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
 
     // Stop recording and get samples
     tauri::async_runtime::spawn(async move {
-        match rm.stop_recording().await {
-            Ok(samples) => {
+        match rm.stop_recording(&workflow_id) {
+            Some(samples) => {
                 debug!("Got {} samples from recording", samples.len());
 
                 // Execute workflow via WorkflowEngine
@@ -684,8 +684,8 @@ fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
                     }
                 }
             }
-            Err(e) => {
-                error!("Failed to stop recording: {}", e);
+            None => {
+                error!("Failed to stop recording: no samples returned");
             }
         }
 

@@ -215,3 +215,34 @@ export const StoredWorkflowSchema = z.object({
 export type TriggerConfig = z.infer<typeof TriggerConfigSchema>;
 export type ModelConfigDto = z.infer<typeof ModelConfigDtoSchema>;
 export type StoredWorkflow = z.infer<typeof StoredWorkflowSchema>;
+
+// Destination types (Bundle 7)
+export const DestinationConfigSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("ActiveWindow"),
+    paste_method: z.string().optional().default("ctrl_v"),
+    preserve_clipboard: z.boolean().optional().default(false),
+  }),
+  z.object({
+    type: z.literal("FileSystem"),
+    path: z.string(),
+    extension: z.string().optional().default("md"),
+    filename_pattern: z.string().optional().default("transcription_{timestamp}.md"),
+  }),
+  z.object({
+    type: z.literal("Telegram"),
+    credential_id: z.string(),
+    chat_id: z.string(),
+    include_audio: z.boolean().optional().default(false),
+  }),
+]);
+
+export const DestinationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  config: DestinationConfigSchema,
+  template: z.string().optional(),
+});
+
+export type DestinationConfig = z.infer<typeof DestinationConfigSchema>;
+export type Destination = z.infer<typeof DestinationSchema>;

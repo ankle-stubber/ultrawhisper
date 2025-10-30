@@ -32,7 +32,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 
 use tauri::tray::TrayIconBuilder;
-use tauri::Emitter;
+use tauri::{Emitter, Listener};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
