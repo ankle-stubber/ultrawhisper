@@ -9,6 +9,7 @@ import { AutostartToggle } from "./AutostartToggle";
 import BatchProcessingSettings from "./BatchProcessingSettings";
 import { UseWorkflowEngine } from "./UseWorkflowEngine";
 import { StreamingSettings } from "./StreamingSettings";
+import { TelegramSetup } from "../destinations/TelegramSetup";
 
 export const AdvancedSettings: React.FC = () => {
   return (
@@ -30,6 +31,15 @@ export const AdvancedSettings: React.FC = () => {
       {/* Streaming Settings */}
       <SettingsGroup title="Streaming">
         <StreamingSettings descriptionMode="tooltip" grouped={true} />
+      </SettingsGroup>
+
+      {/* Telegram Settings (Bundle 4 MVP - will move to Destinations panel in Bundle 6) */}
+      <SettingsGroup title="Telegram (MVP)">
+        <TelegramSetup
+          credentialId="telegram_default"
+          descriptionMode="tooltip"
+          grouped={true}
+        />
       </SettingsGroup>
 
       {/* Batch Processing as its own section */}
