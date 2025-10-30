@@ -246,6 +246,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(model_pool);
     app_handle.manage(workflow_engine);
 
+    // Initialize workflow shortcut registry
+    app_handle.manage(crate::shortcut::WorkflowShortcutRegistry(
+        std::sync::Mutex::new(std::collections::HashMap::new())
+    ));
+
     // Initialize the shortcuts (includes workflow hotkeys if enabled)
     shortcut::init_shortcuts(app_handle);
 
