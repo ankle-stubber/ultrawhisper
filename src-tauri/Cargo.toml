@@ -67,6 +67,7 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tar = "0.4.44"
 flate2 = "1.0"
 transcribe-rs = "0.1.4"
+keyring = "3.6.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
