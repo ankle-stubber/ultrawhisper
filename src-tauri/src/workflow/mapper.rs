@@ -1,6 +1,7 @@
 //! Binding-to-workflow mapper - converts legacy bindings to workflow configs
 
 use super::types::*;
+use crate::destinations::DestinationStorage;
 use crate::settings::{AppSettings, ModelUnloadTimeout, ShortcutBinding};
 use std::path::PathBuf;
 
@@ -73,6 +74,166 @@ pub fn binding_to_workflow(binding: &ShortcutBinding, settings: &AppSettings) ->
         // Destination references (Bundle 2)
         destination_ids,
     }
+}
+
+/// Storage-aware mapper (Bundle 3+): prefers migrated destination IDs when present in storage
+///
+/// This function mirrors `binding_to_workflow` but, for each legacy flag, it first checks
+/// for a migrated per-binding destination (e.g., `migrated_active_window_{binding_id}` or
+/// `migrated_file_{binding_id}`) in `DestinationStorage`. If found, it uses that ID; otherwise
+/// it falls back to the default shared destination IDs.
+pub fn binding_to_workflow_with_storage(
+    binding: &ShortcutBinding,
+    settings: &AppSettings,
+    storage: &DestinationStorage,
+) -> Workflow {
+    // Resolve destination IDs with a preference for migrated per-binding IDs when available
+    let mut destination_ids = Vec::new();
+
+    if binding.paste_to_window {
+        let migrated_id = format!("migrated_active_window_{}", binding.id);
+        let use_migrated = storage.exists(&migrated_id).unwrap_or(false);
+        destination_ids.push(if use_migrated {
+            migrated_id
+        } else {
+            "active_window_default".to_string()
+        });
+    }
+
+    if binding.save_to_file {
+        let migrated_id = format!("migrated_file_{}", binding.id);
+        let use_migrated = storage.exists(&migrated_id).unwrap_or(false);
+        if use_migrated {
+            destination_ids.push(migrated_id);
+        } else {
+            // Try to find a shared per-path FileSystem destination matching this binding's output_path
+            let desired = binding
+                .output_path
+                .as_ref()
+                .map(|p| normalize_path_portable(p));
+
+            if let Some(desired_norm) = desired {
+                if let Ok(list) = storage.list() {
+                    if let Some(found) = list.into_iter().find(|d| match &d.config {
+                        crate::destinations::DestinationConfig::FileSystem { path, .. } => {
+                            normalize_path_portable(path) == desired_norm
+                        }
+                        _ => false,
+                    }) {
+                        destination_ids.push(found.id);
+                    } else {
+                        // Fall back to the default shared file destination
+                        destination_ids.push("file_default".to_string());
+                    }
+                } else {
+                    destination_ids.push("file_default".to_string());
+                }
+            } else {
+                destination_ids.push("file_default".to_string());
+            }
+        }
+    }
+
+    // Fallback: if neither flag set, default to active window to preserve UX
+    if destination_ids.is_empty() {
+        destination_ids.push("active_window_default".to_string());
+    }
+
+    // Map model unload timeout to unload strategy
+    let unload_strategy = match settings.model_unload_timeout {
+        ModelUnloadTimeout::Never => UnloadStrategy::Never,
+        ModelUnloadTimeout::Immediately => UnloadStrategy::Immediately,
+        timeout => {
+            // Convert to seconds, defaulting to 300 (5 minutes) if None
+            let seconds = timeout.to_seconds().unwrap_or(300);
+            UnloadStrategy::AfterDelaySecs(seconds)
+        }
+    };
+
+    Workflow {
+        id: binding.id.clone(),
+        name: binding.name.clone(),
+        description: binding.description.clone(),
+        enabled: true,
+        trigger: TriggerConfig::Hotkey {
+            binding: binding.current_binding.clone(),
+            push_to_talk: settings.push_to_talk,
+        },
+        audio_input: AudioInputConfig {
+            device_id: settings.selected_microphone.clone(),
+            sample_rate: None,  // Use default
+            channels: None,     // Use default
+            vad_enabled: true,  // VAD is always enabled in current impl
+            vad_threshold: 0.5, // Default threshold
+        },
+        model_config: ModelConfig {
+            model_id: settings.selected_model.clone(),
+            language: Some(settings.selected_language.clone()),
+            translate_to_english: settings.translate_to_english,
+        },
+        model_management: ModelManagement {
+            preload_on_startup: false, // Not supported in Phase 1
+            unload_strategy,
+        },
+        streaming_enabled: false, // Phase 2 feature
+        audio_processing: AudioProcessingConfig {
+            save_original: true,  // History manager saves audio
+            save_path: Some(PathBuf::from("~/UltraWhisper/recordings")),
+            compress: None,       // Phase 3 feature
+            delete_after_processing: false,
+        },
+        destination_ids,
+    }
+}
+
+/// Normalize a user-provided path into an absolute, comparable string using environment only
+fn normalize_path_portable(path: &str) -> String {
+    use std::path::{Component, Path, PathBuf};
+
+    fn expand_tilde(p: &str) -> String {
+        if p.starts_with("~/") || p == "~" {
+            if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+                return p.replacen("~", &home, 1);
+            }
+        }
+        p.to_string()
+    }
+
+    fn docs_dir_fallback() -> Option<String> {
+        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+            let mut pb = PathBuf::from(home);
+            pb.push("Documents");
+            return Some(pb.to_string_lossy().to_string());
+        }
+        None
+    }
+
+    let mut p = expand_tilde(path);
+    let lower = p.to_lowercase();
+    if lower == "documents" || lower.starts_with("documents/") || lower.starts_with("documents\\") {
+        if let Some(mut docs) = docs_dir_fallback() {
+            let remainder = p.trim_start_matches("Documents/")
+                             .trim_start_matches("Documents\\");
+            if !remainder.is_empty() {
+                if !(docs.ends_with('/') || docs.ends_with('\\')) { docs.push(std::path::MAIN_SEPARATOR); }
+                docs.push_str(remainder);
+            }
+            p = docs;
+        }
+    }
+
+    let mut buf = PathBuf::new();
+    for comp in Path::new(&p).components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => { buf.pop(); }
+            other => buf.push(other.as_os_str()),
+        }
+    }
+
+    let mut s = buf.to_string_lossy().to_string();
+    while s.ends_with('/') || s.ends_with('\\') { s.pop(); }
+    s
 }
 
 #[cfg(test)]
