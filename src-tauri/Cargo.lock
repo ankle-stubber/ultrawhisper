@@ -7083,6 +7083,7 @@ dependencies = [
  "natural",
  "once_cell",
  "rdev",
+ "regex",
  "reqwest 0.11.27",
  "rodio",
  "rubato",

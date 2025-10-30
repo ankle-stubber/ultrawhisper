@@ -5,6 +5,7 @@ mod clipboard;
 mod commands;
 mod destinations;
 mod file_output;
+mod logger;
 mod managers;
 mod overlay;
 mod settings;
@@ -22,6 +23,7 @@ mod streaming;
 use managers::audio::AudioRecordingManager;
 use managers::batch::BatchTranscriptionManager;
 use managers::history::HistoryManager;
+use managers::logs::LogManager;
 use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
 use std::collections::HashMap;
@@ -182,6 +184,18 @@ fn show_main_window(app: &AppHandle) {
 }
 
 fn initialize_core_logic(app_handle: &AppHandle) {
+    // Initialize log manager FIRST (before any logging happens)
+    let log_manager = Arc::new(LogManager::new(app_handle.clone()));
+    app_handle.manage(log_manager.clone());
+
+    // Initialize the combined logger (forwards to env_logger + captures to LogManager)
+    if let Err(e) = crate::logger::CombinedLogger::init(log_manager.clone()) {
+        eprintln!("Failed to initialize logger: {}", e);
+    }
+
+    // Log startup message to test logger
+    log::info!("UltraWhisper starting up - logging system initialized");
+
     // Clean up stale temporary files from previous sessions
     cleanup_stale_temp_files(app_handle);
 
@@ -304,7 +318,7 @@ fn trigger_update_check(app: AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
+    // Note: Logger will be initialized in setup() after LogManager is created
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -442,7 +456,15 @@ pub fn run() {
             commands::batch::set_delete_after_transcription,
             commands::batch::set_save_to_history,
             commands::batch::set_file_patterns,
-            commands::batch::validate_watch_folder
+            commands::batch::validate_watch_folder,
+            commands::logs::get_logs,
+            commands::logs::clear_logs,
+            commands::logs::export_logs,
+            commands::destinations::list_destinations,
+            commands::destinations::get_destination,
+            commands::destinations::update_destination,
+            commands::destinations::create_destination,
+            commands::destinations::delete_destination
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
