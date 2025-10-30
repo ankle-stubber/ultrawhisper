@@ -161,6 +161,9 @@ pub struct BatchTranscriptionSettings {
     /// Template ID for output formatting
     #[serde(default = "default_template_id")]
     pub template_id: String,
+    /// File patterns to watch for (e.g., ["*.wav", "*.mp3", "*.m4a"])
+    #[serde(default = "default_file_patterns")]
+    pub file_patterns: Vec<String>,
 }
 
 impl Default for BatchTranscriptionSettings {
@@ -177,6 +180,7 @@ impl Default for BatchTranscriptionSettings {
             max_file_size_mb: default_max_file_size_mb(),
             output_folder: None,
             template_id: default_template_id(),
+            file_patterns: default_file_patterns(),
         }
     }
 }
@@ -203,6 +207,10 @@ fn default_max_file_size_mb() -> u64 {
 
 fn default_template_id() -> String {
     "default_markdown".to_string()
+}
+
+fn default_file_patterns() -> Vec<String> {
+    vec!["*.wav".to_string()]
 }
 
 /// Streaming transcription settings for Phase 2

@@ -1,4 +1,5 @@
 use crate::audio_toolkit::audio::load_wav_file;
+use crate::managers::audio::AudioRecordingManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::get_settings;
 use crate::templates::{apply_template, format_timestamp};
@@ -6,13 +7,14 @@ use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Represents a single processed file entry in the tracking database
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -41,12 +43,34 @@ impl ProcessedFilesDb {
         }
     }
 
+    /// Normalize a path string for consistent comparison
+    fn normalize_path_str(path_str: &str) -> String {
+        // Expand tilde if present
+        let expanded = if path_str.starts_with("~/") || path_str == "~" {
+            if let Ok(home) = env::var("HOME").or_else(|_| env::var("USERPROFILE")) {
+                path_str.replacen("~", &home, 1)
+            } else {
+                path_str.to_string()
+            }
+        } else {
+            path_str.to_string()
+        };
+
+        // Try to canonicalize for consistent comparison
+        PathBuf::from(&expanded)
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(expanded))
+            .to_string_lossy()
+            .to_string()
+    }
+
     /// Check if a file has already been processed
     fn contains(&self, file_path: &Path) -> bool {
-        let path_str = file_path.to_string_lossy().to_string();
-        self.processed_files
-            .iter()
-            .any(|entry| entry.path == path_str && entry.success)
+        let normalized = Self::normalize_path_str(&file_path.to_string_lossy());
+        self.processed_files.iter().any(|entry| {
+            let entry_normalized = Self::normalize_path_str(&entry.path);
+            entry_normalized == normalized && entry.success
+        })
     }
 
     /// Add a processed file entry
@@ -175,6 +199,20 @@ impl BatchTranscriptionManagerThread {
         let batch_settings = &settings.batch_transcription;
 
         if !batch_settings.enabled {
+            return Ok(BatchCompleteEvent {
+                processed: 0,
+                failed: 0,
+                timestamp: SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            });
+        }
+
+        // Check if interactive recording is active (single active recording guard)
+        let audio_manager = self.app_handle.state::<Arc<AudioRecordingManager>>();
+        if audio_manager.is_recording() {
+            debug!("Folder watch paused (active recording)");
             return Ok(BatchCompleteEvent {
                 processed: 0,
                 failed: 0,
@@ -361,12 +399,41 @@ impl BatchTranscriptionManagerThread {
         Ok((processed, failed))
     }
 
-    /// Find all WAV files in a folder (non-recursive)
+    /// Check if a file matches any of the configured patterns
+    fn matches_pattern(&self, file_path: &Path, patterns: &[String]) -> bool {
+        let extension = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+
+        patterns.iter().any(|pattern| {
+            // Simple wildcard: "*.wav" -> check if extension is "wav"
+            if let Some(ext) = pattern.strip_prefix("*.") {
+                extension.eq_ignore_ascii_case(ext)
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Normalize a path for consistent comparison
+    /// Expands tilde and canonicalizes if possible
+    fn normalize_path(&self, path: &str) -> String {
+        let expanded = self.expand_tilde(path);
+        // Try to canonicalize, but fall back to expanded path if it fails
+        PathBuf::from(&expanded)
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(expanded.clone()))
+            .to_string_lossy()
+            .to_string()
+    }
+
+    /// Find all audio files matching configured patterns in a folder (non-recursive)
     fn find_wav_files(&self, folder_path: &Path) -> Result<Vec<PathBuf>> {
         let settings = get_settings(&self.app_handle);
         let batch_settings = &settings.batch_transcription;
 
-        let mut wav_files = Vec::new();
+        let mut audio_files = Vec::new();
 
         for entry in fs::read_dir(folder_path)? {
             let entry = entry?;
@@ -384,25 +451,23 @@ impl BatchTranscriptionManagerThread {
                 }
             }
 
-            // Check if it's a WAV file
-            if let Some(ext) = path.extension() {
-                if ext.eq_ignore_ascii_case("wav") {
-                    // Skip if it looks like an output file
-                    if let Some(stem) = path.file_stem() {
-                        if stem
-                            .to_string_lossy()
-                            .ends_with(&batch_settings.output_suffix)
-                        {
-                            continue;
-                        }
+            // Check if it matches any configured pattern
+            if self.matches_pattern(&path, &batch_settings.file_patterns) {
+                // Skip if it looks like an output file
+                if let Some(stem) = path.file_stem() {
+                    if stem
+                        .to_string_lossy()
+                        .ends_with(&batch_settings.output_suffix)
+                    {
+                        continue;
                     }
-
-                    wav_files.push(path);
                 }
+
+                audio_files.push(path);
             }
         }
 
-        Ok(wav_files)
+        Ok(audio_files)
     }
 
     /// Check if a file is ready for processing (stable and not being written)
@@ -648,5 +713,180 @@ impl Drop for BatchTranscriptionManager {
                 debug!("Batch watcher thread joined successfully");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_file_pattern_matching_wav() {
+        let patterns = vec!["*.wav".to_string()];
+
+        let test_cases = vec![
+            (PathBuf::from("test.wav"), true),
+            (PathBuf::from("test.WAV"), true), // Case insensitive
+            (PathBuf::from("test.mp3"), false),
+            (PathBuf::from("/path/to/file.wav"), true),
+        ];
+
+        for (path, expected) in test_cases {
+            let result = matches_pattern_test(&path, &patterns);
+            assert_eq!(
+                result, expected,
+                "Pattern matching failed for {:?}. Expected: {}, Got: {}",
+                path, expected, result
+            );
+        }
+    }
+
+    #[test]
+    fn test_file_pattern_matching_multiple() {
+        let patterns = vec![
+            "*.wav".to_string(),
+            "*.mp3".to_string(),
+            "*.m4a".to_string(),
+        ];
+
+        let test_cases = vec![
+            (PathBuf::from("test.wav"), true),
+            (PathBuf::from("test.mp3"), true),
+            (PathBuf::from("test.m4a"), true),
+            (PathBuf::from("test.MP3"), true), // Case insensitive
+            (PathBuf::from("test.txt"), false),
+            (PathBuf::from("test.flac"), false),
+        ];
+
+        for (path, expected) in test_cases {
+            let result = matches_pattern_test(&path, &patterns);
+            assert_eq!(
+                result, expected,
+                "Pattern matching failed for {:?}. Expected: {}, Got: {}",
+                path, expected, result
+            );
+        }
+    }
+
+    #[test]
+    fn test_path_normalization_tilde() {
+        // Save current env
+        let original_home = env::var("HOME").ok();
+
+        // Set test HOME
+        env::set_var("HOME", "/Users/testuser");
+
+        let normalized = ProcessedFilesDb::normalize_path_str("~/Documents/file.wav");
+        assert!(
+            normalized.contains("/Users/testuser"),
+            "Tilde should be expanded. Got: {}",
+            normalized
+        );
+        assert!(
+            !normalized.contains("~"),
+            "Tilde should be removed. Got: {}",
+            normalized
+        );
+
+        // Restore env
+        if let Some(home) = original_home {
+            env::set_var("HOME", home);
+        } else {
+            env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_path_normalization_consistency() {
+        // Save current env
+        let original_home = env::var("HOME").ok();
+
+        // Set test HOME
+        env::set_var("HOME", "/Users/testuser");
+
+        // These should normalize to the same path
+        let path1 = ProcessedFilesDb::normalize_path_str("~/Documents/test.wav");
+        let path2 = ProcessedFilesDb::normalize_path_str("/Users/testuser/Documents/test.wav");
+
+        // Both should resolve to similar paths (may differ in canonicalization)
+        // At minimum, both should have expanded HOME
+        assert!(
+            path1.contains("/Users/testuser"),
+            "Path 1 should contain expanded home: {}",
+            path1
+        );
+        assert!(
+            path2.contains("/Users/testuser"),
+            "Path 2 should contain home: {}",
+            path2
+        );
+
+        // Restore env
+        if let Some(home) = original_home {
+            env::set_var("HOME", home);
+        } else {
+            env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn test_processed_files_db_duplicate_prevention() {
+        let mut db = ProcessedFilesDb::new();
+
+        let entry = ProcessedFileEntry {
+            path: "/path/to/test.wav".to_string(),
+            processed_at: 1234567890,
+            size: 1000,
+            modified_time: 1234567880,
+            output_file: "/path/to/test_transcribed.md".to_string(),
+            success: true,
+            error: None,
+        };
+
+        // Add entry
+        db.add_entry(entry.clone());
+
+        // Should contain the file
+        assert!(db.contains(Path::new("/path/to/test.wav")));
+
+        // Should not contain a different file
+        assert!(!db.contains(Path::new("/path/to/other.wav")));
+    }
+
+    #[test]
+    fn test_processed_files_db_failed_entries() {
+        let mut db = ProcessedFilesDb::new();
+
+        let failed_entry = ProcessedFileEntry {
+            path: "/path/to/test.wav".to_string(),
+            processed_at: 1234567890,
+            size: 1000,
+            modified_time: 1234567880,
+            output_file: String::new(),
+            success: false,  // Failed
+            error: Some("Test error".to_string()),
+        };
+
+        db.add_entry(failed_entry);
+
+        // Should NOT contain the file because it failed
+        assert!(!db.contains(Path::new("/path/to/test.wav")));
+    }
+
+    // Helper function for testing pattern matching without app handle
+    fn matches_pattern_test(file_path: &Path, patterns: &[String]) -> bool {
+        let extension = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+
+        patterns.iter().any(|pattern| {
+            if let Some(ext) = pattern.strip_prefix("*.") {
+                extension.eq_ignore_ascii_case(ext)
+            } else {
+                false
+            }
+        })
     }
 }

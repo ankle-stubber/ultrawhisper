@@ -218,6 +218,11 @@ impl AudioRecordingManager {
 
     /* ---------- recording --------------------------------------------------- */
 
+    /// Check if currently recording
+    pub fn is_recording(&self) -> bool {
+        !matches!(*self.state.lock().unwrap(), RecordingState::Idle)
+    }
+
     pub fn try_start_recording(&self, binding_id: &str) -> bool {
         let mut state = self.state.lock().unwrap();
 

@@ -108,3 +108,45 @@ pub fn set_save_to_history(app: AppHandle, save: bool) -> Result<(), String> {
     write_settings(&app, settings);
     Ok(())
 }
+
+/// Update file patterns for batch processing
+#[tauri::command]
+pub fn set_file_patterns(app: AppHandle, patterns: Vec<String>) -> Result<(), String> {
+    // Validate patterns
+    for pattern in &patterns {
+        if !pattern.starts_with("*.") {
+            return Err(format!("Invalid pattern '{}'. Patterns must start with '*.' (e.g., '*.wav')", pattern));
+        }
+    }
+
+    if patterns.is_empty() {
+        return Err("At least one file pattern is required".to_string());
+    }
+
+    let mut settings = get_settings(&app);
+    settings.batch_transcription.file_patterns = patterns;
+    write_settings(&app, settings);
+    Ok(())
+}
+
+/// Validate that a folder path exists and is writable
+#[tauri::command]
+pub fn validate_watch_folder(folder_path: String) -> Result<bool, String> {
+    use std::path::Path;
+
+    let path = Path::new(&folder_path);
+
+    if !path.exists() {
+        return Err(format!("Folder does not exist: {}", folder_path));
+    }
+
+    if !path.is_dir() {
+        return Err(format!("Path is not a directory: {}", folder_path));
+    }
+
+    // Try to read the directory to check permissions
+    match std::fs::read_dir(path) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Cannot read folder: {}", e)),
+    }
+}

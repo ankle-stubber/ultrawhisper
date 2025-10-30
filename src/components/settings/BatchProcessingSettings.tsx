@@ -31,6 +31,7 @@ export default function BatchProcessingSettings() {
     max_file_size_mb: 500,
     output_folder: null,
     template_id: "default_markdown",
+    file_patterns: ["*.wav"],
   };
 
   const updateBatchSettings = useCallback(
@@ -230,13 +231,40 @@ export default function BatchProcessingSettings() {
           )}
         </div>
 
+        {/* File Patterns */}
+        <div>
+          <label htmlFor="file-patterns" className="text-sm font-medium">
+            File Patterns
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+            Comma-separated patterns for audio files (e.g., *.wav, *.mp3, *.m4a)
+          </p>
+          <input
+            id="file-patterns"
+            type="text"
+            className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 font-mono text-sm"
+            value={batchSettings.file_patterns?.join(", ") || "*.wav"}
+            onChange={(e) => {
+              const patterns = e.target.value
+                .split(",")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+              updateBatchSettings({ file_patterns: patterns });
+            }}
+            placeholder="*.wav, *.mp3, *.m4a"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Supported formats: *.wav, *.mp3, *.m4a (case-insensitive)
+          </p>
+        </div>
+
         {/* Check Interval */}
         <div>
           <label htmlFor="check-interval" className="text-sm font-medium">
             Check Interval
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
-            How often to scan folders for new WAV files
+            How often to scan folders for new audio files
           </p>
           <select
             id="check-interval"
@@ -353,12 +381,12 @@ export default function BatchProcessingSettings() {
           How Batch Processing Works
         </h4>
         <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
-          <li>Add folders containing WAV audio files to monitor</li>
+          <li>Add folders containing audio files to monitor</li>
+          <li>Configure which file types to process (*.wav, *.mp3, *.m4a)</li>
           <li>Files are automatically transcribed at the configured interval</li>
-          <li>Transcriptions are saved as markdown files in the same folder</li>
+          <li>Transcriptions are saved as markdown files</li>
           <li>Files must be stable (not modified) for {batchSettings.stability_timeout_seconds} seconds before processing</li>
           <li>Processed files are tracked to avoid re-transcription</li>
-          <li>WAV files only in v1 (more formats coming soon)</li>
         </ul>
       </div>
     </div>
