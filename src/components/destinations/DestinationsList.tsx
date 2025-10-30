@@ -38,6 +38,7 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<DestinationEntity[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +57,28 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
     load();
   }, [load]);
 
+  // Sorted view used for rendering and auto-select logic
+  const sorted = useMemo(() => {
+    // Sort by type then name for a stable list
+    return [...items].sort((a, b) => {
+      const at = typeLabel(a.config);
+      const bt = typeLabel(b.config);
+      return at === bt ? a.name.localeCompare(b.name) : at.localeCompare(bt);
+    });
+  }, [items]);
+
+  // Auto-select first item if nothing is selected or selected item doesn't exist
+  useEffect(() => {
+    if (!loading && sorted.length > 0) {
+      // If no selection OR selected item not in list, select first from sorted list
+      if (!selectedId || !sorted.find(item => item.id === selectedId)) {
+        onSelect(sorted[0].id);
+      }
+    }
+  }, [loading, sorted, selectedId, onSelect]);
+
   const handleAddTelegram = useCallback(async () => {
+    setIsCreating(true);
     try {
       // If telegram_default exists, just select it
       const existing = items.find(
@@ -86,17 +108,12 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
     } catch (e: any) {
       const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
       toast.error(`Failed to create Telegram destination: ${msg}`);
+    } finally {
+      setIsCreating(false);
     }
   }, [items, load, onSelect]);
 
-  const sorted = useMemo(() => {
-    // Sort by type then name for a stable list
-    return [...items].sort((a, b) => {
-      const at = typeLabel(a.config);
-      const bt = typeLabel(b.config);
-      return at === bt ? a.name.localeCompare(b.name) : at.localeCompare(bt);
-    });
-  }, [items]);
+  
 
   return (
     <div className="flex flex-col h-full">
@@ -120,7 +137,23 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
           <div className="text-xs text-mid-gray p-2">Loading…</div>
         )}
         {!loading && sorted.length === 0 && (
-          <div className="text-xs text-mid-gray p-2">No destinations found</div>
+          <div className="flex flex-col items-center justify-center p-8 text-center gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-1">
+                No destinations yet
+              </p>
+              <p className="text-xs text-mid-gray">
+                Create your first destination to route transcriptions
+              </p>
+            </div>
+            <button
+              onClick={handleAddTelegram}
+              disabled={isCreating}
+              className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? "Creating..." : "+ Create Telegram Destination"}
+            </button>
+          </div>
         )}
         {!loading &&
           sorted.map((dest) => (

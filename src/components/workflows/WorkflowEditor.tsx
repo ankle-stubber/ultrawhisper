@@ -450,11 +450,47 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
   // Get destination type label
   const getTypeLabel = (dest: Destination): string => {
-    const config = dest.config;
-    if ("ActiveWindow" in config) return "Active Window";
-    if ("FileSystem" in config) return "File System";
-    if ("Telegram" in config) return "Telegram";
-    return "Unknown";
+    switch (dest.config.type) {
+      case "ActiveWindow":
+        return "Active Window";
+      case "FileSystem":
+        return "File System";
+      case "Telegram":
+        return "Telegram";
+      default:
+        return "Unknown";
+    }
+  };
+
+  // Get destination details for display
+  const getDestinationDetails = (dest: Destination): string => {
+    switch (dest.config.type) {
+      case "ActiveWindow": {
+        const pasteMethod = dest.config.ActiveWindow.paste_method || "ctrl_v";
+        const preserveClipboard = dest.config.ActiveWindow.preserve_clipboard || false;
+        const method = pasteMethod === "direct" ? "Direct paste" : "Ctrl+V";
+        const clipboardStatus = preserveClipboard ? "On" : "Off";
+        return `${method} • Preserve clipboard: ${clipboardStatus}`;
+      }
+
+      case "FileSystem": {
+        const path = dest.config.FileSystem.path;
+        const pattern = dest.config.FileSystem.filename_pattern;
+        if (pattern && pattern !== "transcription_{timestamp}.md") {
+          return `${path} • ${pattern}`;
+        }
+        return path;
+      }
+
+      case "Telegram": {
+        const chatId = dest.config.Telegram.chat_id || "(no chat)";
+        const credId = dest.config.Telegram.credential_id || "telegram_default";
+        return `Chat: ${chatId} • Credential: ${credId}`;
+      }
+
+      default:
+        return "Unknown destination type";
+    }
   };
 
   if (isLoading) {
@@ -804,10 +840,17 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                       }
                       className="cursor-pointer"
                     />
-                    <span className="flex-1">{dest.name}</span>
-                    <span className="text-xs px-2 py-1 bg-mid-gray/20 rounded">
-                      {getTypeLabel(dest)}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-medium">{dest.name}</span>
+                        <span className="text-xs px-2 py-1 bg-mid-gray/20 rounded">
+                          {getTypeLabel(dest)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-mid-gray truncate">
+                        {getDestinationDetails(dest)}
+                      </div>
+                    </div>
                   </label>
                 ))}
               </div>

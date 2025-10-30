@@ -89,9 +89,6 @@ function App() {
       case "workflows":
         setSelectedItemId("batch-processing");
         break;
-      case "destinations":
-        setSelectedItemId("telegram-default");
-        break;
       case "models":
         setSelectedItemId("model-management");
         break;
