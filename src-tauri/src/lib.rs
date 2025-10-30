@@ -440,7 +440,9 @@ pub fn run() {
             commands::batch::set_check_interval,
             commands::batch::set_stability_timeout,
             commands::batch::set_delete_after_transcription,
-            commands::batch::set_save_to_history
+            commands::batch::set_save_to_history,
+            commands::batch::set_file_patterns,
+            commands::batch::validate_watch_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

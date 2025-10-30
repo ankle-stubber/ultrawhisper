@@ -55,8 +55,15 @@ export const BatchTranscriptionSettingsSchema = z.object({
   max_file_size_mb: z.number().optional().default(500),
   output_folder: z.string().nullable().optional(),
   template_id: z.string().optional().default("default_markdown"),
+  file_patterns: z.array(z.string()).optional().default(["*.wav"]),
 });
 export type BatchTranscriptionSettings = z.infer<typeof BatchTranscriptionSettingsSchema>;
+
+export interface BatchCompleteEvent {
+  processed: number;
+  failed: number;
+  timestamp: number;
+}
 
 export const BackpressurePolicySchema = z.enum(["Block", "DropNewest", "Coalesce"]);
 export type BackpressurePolicy = z.infer<typeof BackpressurePolicySchema>;

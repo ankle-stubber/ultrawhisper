@@ -1,10 +1,68 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 // import { open } from "@tauri-apps/plugin-dialog";  // Temporarily disabled to debug
-import { Trash2, Folder, Plus, Play } from "lucide-react";
+import { Trash2, Folder, Plus, Play, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings } from "../../hooks/useSettings";
 import type { BatchTranscriptionSettings } from "../../lib/types";
+
+/**
+ * Validate and normalize file patterns
+ * Converts ".wav" to "*.wav" and validates format
+ */
+function validateAndNormalizePatterns(input: string): { valid: boolean; patterns: string[]; error?: string } {
+  const rawPatterns = input
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (rawPatterns.length === 0) {
+    return { valid: false, patterns: [], error: "At least one pattern is required" };
+  }
+
+  const normalizedPatterns: string[] = [];
+
+  for (const pattern of rawPatterns) {
+    let normalized = pattern;
+
+    // Auto-convert ".ext" to "*.ext"
+    if (normalized.startsWith(".")) {
+      normalized = "*" + normalized;
+    }
+
+    // Validate pattern format
+    if (!normalized.startsWith("*.")) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Patterns must be in format "*.ext" (e.g., "*.wav", "*.mp3")`
+      };
+    }
+
+    // Extract extension and validate it's not empty
+    const extension = normalized.substring(2);
+    if (extension.length === 0) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Extension cannot be empty`
+      };
+    }
+
+    // Check for invalid characters in extension
+    if (extension.includes("*") || extension.includes("/") || extension.includes("\\")) {
+      return {
+        valid: false,
+        patterns: [],
+        error: `Invalid pattern "${pattern}". Extension cannot contain wildcards or path separators`
+      };
+    }
+
+    normalizedPatterns.push(normalized);
+  }
+
+  return { valid: true, patterns: normalizedPatterns };
+}
 
 const intervalOptions = [
   { value: 60, label: "1 minute" },
@@ -18,6 +76,7 @@ export default function BatchProcessingSettings() {
   const { settings, refreshSettings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [newFolder, setNewFolder] = useState("");
+  const [patternError, setPatternError] = useState<string | null>(null);
 
   const batchSettings = settings?.batch_transcription || {
     enabled: false,
@@ -31,6 +90,7 @@ export default function BatchProcessingSettings() {
     max_file_size_mb: 500,
     output_folder: null,
     template_id: "default_markdown",
+    file_patterns: ["*.wav"],
   };
 
   const updateBatchSettings = useCallback(
@@ -51,31 +111,43 @@ export default function BatchProcessingSettings() {
 
   const handleAddFolder = useCallback(async () => {
     // Temporarily using text input instead of folder picker
-    if (!newFolder.trim()) {
+    const folder = newFolder.trim();
+    if (!folder) {
       toast.error("Please enter a folder path");
       return;
     }
 
-    if (batchSettings.watch_folders.includes(newFolder)) {
-      toast.info("Folder already in watch list");
-      return;
-    }
+    try {
+      // Validate folder path via backend (exists + permissions)
+      const ok = await invoke<boolean>("validate_watch_folder", { folderPath: folder });
+      if (!ok) {
+        toast.error("Folder validation failed");
+        return;
+      }
 
-    const updatedFolders = [...batchSettings.watch_folders, newFolder];
-    await updateBatchSettings({ watch_folders: updatedFolders });
-    setNewFolder("");
-    toast.success("Folder added to watch list");
-  }, [newFolder, batchSettings.watch_folders, updateBatchSettings]);
+      // Add via backend so normalization/dedup logic applies
+      await invoke("add_watch_folder", { folderPath: folder });
+      await refreshSettings();
+      setNewFolder("");
+      toast.success("Folder added to watch list");
+    } catch (error: any) {
+      const msg = typeof error === "string" ? error : (error?.toString?.() || "Unknown error");
+      toast.error(`Failed to add folder: ${msg}`);
+    }
+  }, [newFolder, refreshSettings]);
 
   const handleRemoveFolder = useCallback(
     async (folderPath: string) => {
-      const updatedFolders = batchSettings.watch_folders.filter(
-        (f) => f !== folderPath
-      );
-      await updateBatchSettings({ watch_folders: updatedFolders });
-      toast.success("Folder removed from watch list");
+      try {
+        await invoke("remove_watch_folder", { folderPath });
+        await refreshSettings();
+        toast.success("Folder removed from watch list");
+      } catch (error: any) {
+        const msg = typeof error === "string" ? error : (error?.toString?.() || "Unknown error");
+        toast.error(`Failed to remove folder: ${msg}`);
+      }
     },
-    [batchSettings.watch_folders, updateBatchSettings]
+    [refreshSettings]
   );
 
   const handleProcessNow = useCallback(async () => {
@@ -230,13 +302,68 @@ export default function BatchProcessingSettings() {
           )}
         </div>
 
+        {/* File Patterns */}
+        <div>
+          <label htmlFor="file-patterns" className="text-sm font-medium">
+            File Patterns
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+            Comma-separated patterns for audio files (e.g., *.wav, .mp3, *.m4a)
+          </p>
+          <input
+            id="file-patterns"
+            type="text"
+            className={`w-full px-3 py-2 border rounded-md dark:bg-gray-800 font-mono text-sm ${
+              patternError
+                ? "border-red-500 dark:border-red-500"
+                : "dark:border-gray-700"
+            }`}
+            value={batchSettings.file_patterns?.join(", ") || "*.wav"}
+            onChange={async (e) => {
+              const result = validateAndNormalizePatterns(e.target.value);
+
+              if (!result.valid) {
+                setPatternError(result.error || "Invalid pattern");
+                return;
+              }
+              setPatternError(null);
+              try {
+                await invoke("set_file_patterns", { patterns: result.patterns });
+                await refreshSettings();
+              } catch (err: any) {
+                const msg = typeof err === "string" ? err : (err?.toString?.() || "Failed to update patterns");
+                setPatternError(msg);
+              }
+            }}
+            onBlur={() => {
+              // Clear error on blur if current value is valid
+              const currentValue = batchSettings.file_patterns?.join(", ") || "*.wav";
+              const result = validateAndNormalizePatterns(currentValue);
+              if (result.valid) {
+                setPatternError(null);
+              }
+            }}
+            placeholder="*.wav, .mp3, *.m4a"
+          />
+          {patternError ? (
+            <div className="flex items-start gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
+              <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{patternError}</span>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Supported formats: *.wav, *.mp3, *.m4a (case-insensitive). You can use shorthand like ".wav"
+            </p>
+          )}
+        </div>
+
         {/* Check Interval */}
         <div>
           <label htmlFor="check-interval" className="text-sm font-medium">
             Check Interval
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
-            How often to scan folders for new WAV files
+            How often to scan folders for new audio files
           </p>
           <select
             id="check-interval"
@@ -353,12 +480,12 @@ export default function BatchProcessingSettings() {
           How Batch Processing Works
         </h4>
         <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
-          <li>Add folders containing WAV audio files to monitor</li>
+          <li>Add folders containing audio files to monitor</li>
+          <li>Configure which file types to process (*.wav, *.mp3, *.m4a)</li>
           <li>Files are automatically transcribed at the configured interval</li>
-          <li>Transcriptions are saved as markdown files in the same folder</li>
+          <li>Transcriptions are saved as markdown files</li>
           <li>Files must be stable (not modified) for {batchSettings.stability_timeout_seconds} seconds before processing</li>
           <li>Processed files are tracked to avoid re-transcription</li>
-          <li>WAV files only in v1 (more formats coming soon)</li>
         </ul>
       </div>
     </div>
