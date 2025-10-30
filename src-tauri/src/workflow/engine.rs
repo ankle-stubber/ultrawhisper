@@ -5,7 +5,7 @@ use super::mapper::{binding_to_workflow, binding_to_workflow_with_storage};
 use super::types::Workflow;
 use crate::managers::history::HistoryManager;
 use crate::model_pool::ModelPool;
-use crate::destinations::{ActiveWindowDestination, FileSystemDestination, DestinationConfig, DestinationStorage};
+use crate::destinations::{ActiveWindowDestination, FileSystemDestination, TelegramDestination, DestinationConfig, DestinationStorage};
 use crate::settings::get_settings;
 use crate::streaming::chunker::AudioChunk;
 use crate::streaming::session::StreamingSession;
@@ -106,9 +106,25 @@ impl WorkflowEngine {
                             debug!("Added FileSystem destination: {} -> {} (pattern: {})",
                                    dest_id, path, filename_pattern);
                         }
-                        DestinationConfig::Telegram { .. } => {
-                            // Telegram not implemented in Bundle 3
-                            debug!("Skipping Telegram destination '{}' (will be implemented in Bundle 4)", dest_id);
+                        DestinationConfig::Telegram { ref credential_id, ref chat_id, .. } => {
+                            // Bundle 4: Retrieve bot token from keychain and instantiate TelegramDestination
+                            match crate::commands::telegram::get_telegram_credentials(credential_id.clone()) {
+                                Ok(credentials) => {
+                                    let adapter = TelegramDestination::new(
+                                        template,
+                                        credentials.bot_token,
+                                        chat_id.clone(),
+                                    );
+                                    router.add_destination(Box::new(adapter));
+                                    info!("Added Telegram destination: {} (chat_id: {})", dest_id, chat_id);
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Skipping Telegram destination '{}': failed to retrieve credentials for '{}': {}",
+                                        dest_id, credential_id, e
+                                    );
+                                }
+                            }
                         }
                     }
                 }
