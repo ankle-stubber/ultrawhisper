@@ -16,6 +16,10 @@ use crate::utils;
 use crate::workflow::{WorkflowStorage, types::TriggerConfig};
 use crate::ManagedToggleState;
 
+/// Registry to track which hotkeys are currently registered for workflows
+/// Maps workflow_id -> binding string
+pub struct WorkflowShortcutRegistry(pub std::sync::Mutex<std::collections::HashMap<String, String>>);
+
 pub fn init_shortcuts(app: &AppHandle) {
     let settings = settings::load_or_create_app_settings(app);
 
@@ -486,6 +490,15 @@ fn _unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(),
 // ========== Workflow Shortcut Registration ==========
 
 /// Register workflow hotkeys (separate from legacy bindings)
+///
+/// Notes on behavior:
+/// - Collisions are handled in `register_workflow_shortcut` by checking the
+///   global shortcut registry. When a collision is detected, we skip
+///   registration and log a neutral warning. This results in a "first-win"
+///   behavior across legacy bindings and other workflows.
+/// - Prior bindings for the same workflow are unregistered atomically via
+///   `WorkflowShortcutRegistry` before attempting to register a new one.
+///
 /// Returns list of successfully registered workflow IDs
 pub fn register_workflow_shortcuts(app: &AppHandle) -> Vec<String> {
     let settings = get_settings(app);
@@ -513,7 +526,6 @@ pub fn register_workflow_shortcuts(app: &AppHandle) -> Vec<String> {
     };
 
     let mut registered = Vec::new();
-    let mut collisions = Vec::new();
 
     for workflow in workflows {
         if !workflow.enabled {
@@ -521,30 +533,17 @@ pub fn register_workflow_shortcuts(app: &AppHandle) -> Vec<String> {
         }
 
         if let TriggerConfig::Hotkey { binding, push_to_talk } = &workflow.trigger {
-            // Check if binding already registered (collision with legacy)
-            if is_shortcut_registered(app, binding) {
-                collisions.push((workflow.id.clone(), binding.clone()));
-                continue; // Skip, legacy wins for now
-            }
-
             // Register with closure that calls workflow execution
             match register_workflow_shortcut(app, &workflow.id, binding, *push_to_talk) {
                 Ok(_) => {
                     registered.push(workflow.id.clone());
-                    debug!("Registered workflow hotkey: {} -> {}", workflow.name, binding);
                 }
                 Err(e) => {
-                    error!("Failed to register workflow {}: {}", workflow.id, e);
+                    // Collision or other error - already logged in register_workflow_shortcut
+                    debug!("Skipped workflow {} registration: {}", workflow.id, e);
                 }
             }
         }
-    }
-
-    if !collisions.is_empty() {
-        warn!(
-            "Workflow hotkey collisions detected (legacy bindings take precedence): {:?}",
-            collisions
-        );
     }
 
     registered
@@ -565,30 +564,70 @@ fn register_workflow_shortcut(
     binding: &str,
     push_to_talk: bool,
 ) -> Result<(), String> {
+    let registry = app.state::<WorkflowShortcutRegistry>();
+
+    // STEP 1: Atomically remove old binding from registry
+    let old_binding = {
+        let mut reg = registry.0.lock().unwrap();
+        reg.remove(workflow_id)
+    };
+
+    // STEP 2: Unregister old binding if it exists
+    if let Some(old_binding_str) = old_binding {
+        match old_binding_str.parse::<Shortcut>() {
+            Ok(old_shortcut) => {
+                match app.global_shortcut().unregister(old_shortcut) {
+                    Ok(_) => debug!("Unregistered workflow shortcut {} -> {}", workflow_id, old_binding_str),
+                    Err(e) => error!("Failed to unregister old workflow shortcut {} -> {}: {}", workflow_id, old_binding_str, e),
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse old workflow binding {} -> {}: {}", workflow_id, old_binding_str, e);
+            }
+        }
+    }
+
+    // STEP 3: Parse new shortcut
     let shortcut = binding
         .parse::<Shortcut>()
         .map_err(|e| format!("Invalid shortcut: {}", e))?;
 
-    let workflow_id = workflow_id.to_string();
-    let app_clone = app.clone();
+    // STEP 4: Check for collision with any existing registration (legacy or other workflows)
+    if app.global_shortcut().is_registered(shortcut) {
+        // Neutral wording; we don't assert which subsystem owns the registration
+        warn!(
+            "Skipping workflow {} — shortcut {} already registered",
+            workflow_id, binding
+        );
+        return Err(format!("Shortcut '{}' is already registered", binding));
+    }
 
+    // STEP 5: Register new binding
+    let workflow_id_clone = workflow_id.to_string();
     app.global_shortcut()
         .on_shortcut(shortcut, move |ah, scut, event| {
             if scut == &shortcut {
                 if push_to_talk {
                     if event.state == ShortcutState::Pressed {
-                        start_workflow_recording(ah, &workflow_id);
+                        start_workflow_recording(ah, &workflow_id_clone);
                     } else if event.state == ShortcutState::Released {
-                        stop_and_execute_workflow(ah, &workflow_id);
+                        stop_and_execute_workflow(ah, &workflow_id_clone);
                     }
                 } else {
                     if event.state == ShortcutState::Pressed {
-                        toggle_workflow_recording(ah, &workflow_id);
+                        toggle_workflow_recording(ah, &workflow_id_clone);
                     }
                 }
             }
         })
         .map_err(|e| format!("Registration failed: {}", e))?;
+
+    // STEP 6: Insert into registry only on success
+    {
+        let mut reg = registry.0.lock().unwrap();
+        reg.insert(workflow_id.to_string(), binding.to_string());
+    }
+    debug!("Registered workflow shortcut {} -> {}", workflow_id, binding);
 
     Ok(())
 }
@@ -602,22 +641,36 @@ pub fn refresh_workflow_shortcuts(app: &AppHandle) {
 
 /// Unregister all workflow shortcuts
 fn unregister_all_workflow_shortcuts(app: &AppHandle) {
-    let workflow_storage = match app.try_state::<WorkflowStorage>() {
-        Some(storage) => storage,
+    let registry = match app.try_state::<WorkflowShortcutRegistry>() {
+        Some(reg) => reg,
         None => return,
     };
 
-    let workflows = match workflow_storage.list() {
-        Ok(wfs) => wfs,
-        Err(_) => return,
+    // Clone snapshot to avoid holding lock during unregister calls
+    let snapshot = {
+        let reg = registry.0.lock().unwrap();
+        reg.clone()
     };
 
-    for workflow in workflows {
-        if let TriggerConfig::Hotkey { binding, .. } = &workflow.trigger {
-            if let Ok(shortcut) = binding.parse::<Shortcut>() {
-                let _ = app.global_shortcut().unregister(shortcut);
+    // Unregister all from snapshot
+    for (workflow_id, binding) in snapshot {
+        match binding.parse::<Shortcut>() {
+            Ok(shortcut) => {
+                match app.global_shortcut().unregister(shortcut) {
+                    Ok(_) => debug!("Unregistered workflow shortcut {} -> {}", workflow_id, binding),
+                    Err(e) => error!("Failed to unregister workflow shortcut {} -> {}: {}", workflow_id, binding, e),
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse workflow binding {} -> {}: {}", workflow_id, binding, e);
             }
         }
+    }
+
+    // Clear the registry
+    {
+        let mut reg = registry.0.lock().unwrap();
+        reg.clear();
     }
 }
 
