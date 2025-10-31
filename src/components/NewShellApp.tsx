@@ -80,7 +80,7 @@ export function NewShellApp() {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 flex overflow-hidden">
+        <main className="flex-1 flex overflow-hidden min-w-0">
           {renderPage()}
         </main>
       </div>

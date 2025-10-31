@@ -10,6 +10,12 @@
   --color-mid-gray: #808080;
 }
 
+/* Prevent horizontal overflow at the root */
+html, body, #root {
+  height: 100%;
+  overflow-x: hidden;
+}
+
 /* ============================================
    THEME SYSTEM - UltraWhisper
    ============================================ */

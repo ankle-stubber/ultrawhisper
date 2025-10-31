@@ -36,9 +36,9 @@ export function WorkflowsPage() {
       />
 
       {/* Content - Two Panel Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Left Panel - Workflows List */}
-        <div className="w-80 border-r uw-border-default overflow-y-auto uw-scroll uw-bg-elevated">
+        <div className="w-80 border-r uw-border-default overflow-y-auto overflow-x-hidden uw-scroll uw-bg-elevated">
           <WorkflowsList
             selectedId={selectedWorkflowId}
             onSelect={setSelectedWorkflowId}
@@ -46,7 +46,7 @@ export function WorkflowsPage() {
         </div>
 
         {/* Right Panel - Workflow Detail */}
-        <div className="flex-1 overflow-y-auto uw-scroll">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden uw-scroll min-w-0">
           <WorkflowDetail workflowId={selectedWorkflowId} />
         </div>
       </div>

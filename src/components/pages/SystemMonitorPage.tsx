@@ -280,9 +280,9 @@ export function SystemMonitorPage() {
       </div>
 
       {/* Content - Two Panel Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-w-0">
           {/* Left Panel - Logs List */}
-          <div className="w-80 border-r uw-border-default overflow-y-auto uw-scroll uw-bg-elevated">
+          <div className="w-80 border-r uw-border-default overflow-y-auto overflow-x-hidden uw-scroll uw-bg-elevated">
             <LogsList
               selectedId={selectedLogId}
               onSelect={setSelectedLogId}
@@ -290,7 +290,7 @@ export function SystemMonitorPage() {
           </div>
 
           {/* Right Panel - Log Details */}
-          <div className="flex-1 overflow-y-auto uw-scroll">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden uw-scroll min-w-0">
             <LogsDetail logId={selectedLogId} />
           </div>
       </div>

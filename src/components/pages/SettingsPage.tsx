@@ -58,7 +58,7 @@ export function SettingsPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto uw-scroll">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden uw-scroll">
         <div className="p-6">
           {activeTab === "general" && <GeneralSettings />}
           {activeTab === "appearance" && <AppearanceSettings />}
