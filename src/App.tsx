@@ -1,31 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { Toaster } from "sonner";
 import "./App.css";
-import AccessibilityPermissions from "./components/AccessibilityPermissions";
-import Footer from "./components/footer";
 import UltraWhisperTextLogo from "./components/icons/UltraWhisperTextLogo";
 import Onboarding from "./components/onboarding";
-import { ThreePanelLayout } from "./components/layout/ThreePanelLayout";
-import { WorkflowsList } from "./components/workflows/WorkflowsList";
-import { WorkflowDetail } from "./components/workflows/WorkflowDetail";
-import { DestinationsList } from "./components/destinations/DestinationsList";
-import { DestinationDetail } from "./components/destinations/DestinationDetail";
-import { ModelsList } from "./components/models/ModelsList";
-import { ModelDetail } from "./components/models/ModelDetail";
-import { HistoryList } from "./components/history/HistoryList";
-import { HistoryDetail } from "./components/history/HistoryDetail";
-import { LogsList } from "./components/logs/LogsList";
-import { LogsDetail } from "./components/logs/LogsDetail";
-import { Category } from "./lib/types";
+import { LegacyApp } from "./components/LegacyApp";
+import { NewShellApp } from "./components/NewShellApp";
 import { useSettings } from "./hooks/useSettings";
-import { useNavigationStore } from "./stores/navigationStore";
 
 function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
-  const { activeCategory, setActiveCategory } = useNavigationStore();
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const { settings, updateSetting } = useSettings();
+
+  // Check if new shell is enabled via environment variable
+  const useNewShell = import.meta.env.VITE_USE_NEW_SHELL === "true";
 
   useEffect(() => {
     checkOnboardingStatus();
@@ -72,6 +59,7 @@ function App() {
     setShowOnboarding(false);
   };
 
+  // Show onboarding if needed
   if (showOnboarding) {
     return (
       <div className="h-screen flex flex-col">
@@ -83,111 +71,14 @@ function App() {
     );
   }
 
-  // Auto-select first item when category changes
-  useEffect(() => {
-    switch (activeCategory) {
-      case "workflows":
-        setSelectedItemId("batch-processing");
-        break;
-      case "models":
-        setSelectedItemId("model-management");
-        break;
-      case "history":
-        setSelectedItemId("all-transcriptions");
-        break;
-      case "logs":
-        setSelectedItemId("application-logs");
-        break;
-    }
-  }, [activeCategory]);
-
-  // Render items panel based on active category
-  const renderItemsPanel = () => {
-    switch (activeCategory) {
-      case "workflows":
-        return (
-          <WorkflowsList
-            selectedId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        );
-      case "destinations":
-        return (
-          <DestinationsList
-            selectedId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        );
-      case "models":
-        return (
-          <ModelsList
-            selectedId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        );
-      case "history":
-        return (
-          <HistoryList
-            selectedId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        );
-      case "logs":
-        return (
-          <LogsList
-            selectedId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        );
-    }
-  };
-
-  // Render detail panel based on active category
-  const renderDetailPanel = () => {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
-        <div className="flex-1 overflow-y-auto w-full">
-          <div className="flex flex-col p-4 gap-4 w-full">
-            <AccessibilityPermissions />
-            {activeCategory === "workflows" && (
-              <WorkflowDetail workflowId={selectedItemId} />
-            )}
-            {activeCategory === "destinations" && (
-              <DestinationDetail destinationId={selectedItemId} />
-            )}
-            {activeCategory === "models" && (
-              <ModelDetail modelId={selectedItemId} />
-            )}
-            {activeCategory === "history" && (
-              <HistoryDetail historyId={selectedItemId} />
-            )}
-            {activeCategory === "logs" && (
-              <LogsDetail logId={selectedItemId} />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="h-screen flex flex-col">
-      <Toaster />
-      {/* Main content area that takes remaining space */}
-      <div className="flex-1 flex overflow-hidden">
-        <ThreePanelLayout
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-          selectedItemId={selectedItemId}
-          onItemSelect={setSelectedItemId}
-          itemsPanel={renderItemsPanel()}
-          detailPanel={renderDetailPanel()}
-        />
-      </div>
-      {/* Fixed footer at bottom */}
-      <Footer />
-    </div>
-  );
+  // Feature flag gate: render new or legacy shell
+  if (useNewShell) {
+    console.log("Using NEW shell (VITE_USE_NEW_SHELL=true)");
+    return <NewShellApp />;
+  } else {
+    console.log("Using LEGACY shell (VITE_USE_NEW_SHELL=false or not set)");
+    return <LegacyApp />;
+  }
 }
 
 export default App;
