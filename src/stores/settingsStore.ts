@@ -111,6 +111,8 @@ const settingUpdaters: {
     invoke("change_use_workflow_engine_setting", { enabled: value }),
   streaming: (value) =>
     invoke("change_streaming_settings", { streaming: value }),
+  cleaning: (value) =>
+    invoke("change_cleaning_settings", { cleaning: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(

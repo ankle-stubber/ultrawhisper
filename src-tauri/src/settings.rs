@@ -2,7 +2,7 @@ use crate::streaming::queue::BackpressurePolicy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use serde_json::Value as JsonValue;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::StoreExt;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -214,6 +214,88 @@ fn default_file_patterns() -> Vec<String> {
     vec!["*.wav".to_string()]
 }
 
+/// Text cleaning rule for transcript post-processing
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CleaningRule {
+    pub pattern: String,
+    pub replace: String,
+    #[serde(default)]
+    pub flags: Option<String>,
+}
+
+/// Text cleaning settings
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CleaningSettings {
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(default = "default_cleaning_profile")]
+    pub profile: String,
+
+    #[serde(default = "default_cleaning_rules")]
+    pub rules: Vec<CleaningRule>,
+}
+
+impl Default for CleaningSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            profile: default_cleaning_profile(),
+            rules: default_cleaning_rules(),
+        }
+    }
+}
+
+fn default_cleaning_profile() -> String {
+    "basic".to_string()
+}
+
+fn default_cleaning_rules() -> Vec<CleaningRule> {
+    vec![
+        // 1. Collapse multiple spaces
+        CleaningRule {
+            pattern: r"\s{2,}".to_string(),
+            replace: " ".to_string(),
+            flags: None,
+        },
+        // 2. Space after punctuation
+        CleaningRule {
+            pattern: r"([.,!?;:])(\S)".to_string(),
+            replace: "$1 $2".to_string(),
+            flags: None,
+        },
+        // 3. Remove space before punctuation
+        CleaningRule {
+            pattern: r"\s+([.,!?;:])".to_string(),
+            replace: "$1".to_string(),
+            flags: None,
+        },
+        // 4. Strip trailing whitespace (multiline)
+        CleaningRule {
+            pattern: r"\s+$".to_string(),
+            replace: "".to_string(),
+            flags: Some("m".to_string()),
+        },
+    ]
+}
+
+/// Default rules for the "disfluency" profile: remove fillers, then spacing fixes
+fn default_disfluency_rules() -> Vec<CleaningRule> {
+    let mut rules = Vec::new();
+
+    // 0. Remove common disfluencies (case-insensitive) and any trailing punctuation
+    rules.push(CleaningRule {
+        pattern: r"\b(uh|um|er|ah)\b[\.,!\?:;]*".to_string(),
+        replace: "".to_string(),
+        flags: Some("i".to_string()),
+    });
+
+    // 1-4. Apply the same conservative spacing/punctuation rules as basic
+    rules.extend(default_cleaning_rules());
+
+    rules
+}
+
 /// Streaming transcription settings for Phase 2
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamingSettings {
@@ -353,6 +435,8 @@ pub struct AppSettings {
     pub use_workflow_engine: bool,
     #[serde(default)]
     pub streaming: StreamingSettings,
+    #[serde(default)]
+    pub cleaning: CleaningSettings,
 }
 
 fn default_model() -> String {
@@ -437,6 +521,7 @@ pub fn get_default_settings() -> AppSettings {
         batch_transcription: BatchTranscriptionSettings::default(),
         use_workflow_engine: false,
         streaming: StreamingSettings::default(),
+        cleaning: CleaningSettings::default(),
     }
 }
 
@@ -529,6 +614,28 @@ pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
 pub fn get_history_limit(app: &AppHandle) -> usize {
     let settings = get_settings(app);
     settings.history_limit
+}
+
+#[tauri::command]
+pub fn change_cleaning_settings(app: AppHandle, cleaning: CleaningSettings) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+
+    // If no explicit rules are provided, populate based on profile
+    let mut incoming = cleaning;
+    if incoming.rules.is_empty() {
+        incoming.rules = match incoming.profile.as_str() {
+            "disfluency" => default_disfluency_rules(),
+            _ => default_cleaning_rules(),
+        };
+    }
+
+    settings.cleaning = incoming;
+    write_settings(&app, settings);
+
+    // Emit settings change event
+    let _ = app.emit("settings-changed", ());
+
+    Ok(())
 }
 
 #[cfg(test)]

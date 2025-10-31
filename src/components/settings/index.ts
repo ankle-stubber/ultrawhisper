@@ -15,6 +15,7 @@ export { ShowOverlay } from "./ShowOverlay";
 export { HandyShortcut } from "./HandyShortcut";
 export { TranslateToEnglish } from "./TranslateToEnglish";
 export { CustomWords } from "./CustomWords";
+export { TranscriptionCleaning } from "./TranscriptionCleaning";
 export { AppDataDirectory } from "./AppDataDirectory";
 export { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";
 export { StartHidden } from "./StartHidden";

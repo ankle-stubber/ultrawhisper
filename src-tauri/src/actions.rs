@@ -249,12 +249,17 @@ impl ShortcutAction for UnifiedTranscribeAction {
                 let transcription_time = Instant::now();
                 let samples_clone = samples.clone();
                 match tm.transcribe(samples) {
-                    Ok(transcription) => {
+                    Ok(mut transcription) => {
                         debug!(
                             "Transcription completed in {:?}: '{}'",
                             transcription_time.elapsed(),
                             transcription
                         );
+
+                        // Apply text cleaning to legacy transcription
+                        let settings = get_settings(&ah);
+                        transcription = crate::text_cleaning::clean_text(&transcription, &settings.cleaning);
+
                         if !transcription.is_empty() {
                             // Save to history with workflow information
                             let hm_clone = Arc::clone(&hm);
