@@ -409,52 +409,8 @@ fn default_sound_theme() -> SoundTheme {
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
-    #[cfg(target_os = "windows")]
-    let default_shortcut = "ctrl+space";
-    #[cfg(target_os = "macos")]
-    let default_shortcut = "option+space";
-    #[cfg(target_os = "linux")]
-    let default_shortcut = "ctrl+space";
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_shortcut = "alt+space";
-
-    // Define the second shortcut for file output
-    #[cfg(target_os = "windows")]
-    let file_shortcut = "ctrl+alt+t";
-    #[cfg(target_os = "macos")]
-    let file_shortcut = "cmd+option+t";
-    #[cfg(target_os = "linux")]
-    let file_shortcut = "ctrl+alt+t";
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let file_shortcut = "ctrl+alt+t";
-
-    let mut bindings = HashMap::new();
-    bindings.insert(
-        "transcribe".to_string(),
-        ShortcutBinding {
-            id: "transcribe".to_string(),
-            name: "Transcribe".to_string(),
-            description: "Converts your speech into text.".to_string(),
-            default_binding: default_shortcut.to_string(),
-            current_binding: default_shortcut.to_string(),
-            paste_to_window: true,
-            save_to_file: false,
-            output_path: None,
-        },
-    );
-    bindings.insert(
-        "transcribe_to_file".to_string(),
-        ShortcutBinding {
-            id: "transcribe_to_file".to_string(),
-            name: "Save to File".to_string(),
-            description: "Saves transcription as markdown file.".to_string(),
-            default_binding: file_shortcut.to_string(),
-            current_binding: file_shortcut.to_string(),
-            paste_to_window: false,
-            save_to_file: true,
-            output_path: Some("Documents/UltraWhisper".to_string()),
-        },
-    );
+    // Legacy settings-driven bindings have been removed in favor of Workflow hotkeys.
+    let bindings = HashMap::new();
 
     AppSettings {
         bindings,
@@ -519,33 +475,11 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
-    // Migration: ensure the file-output binding exists for existing users
-    if !settings.bindings.contains_key("transcribe_to_file") {
-        #[cfg(target_os = "windows")]
-        let file_shortcut = "ctrl+alt+t";
-        #[cfg(target_os = "macos")]
-        let file_shortcut = "cmd+option+t";
-        #[cfg(target_os = "linux")]
-        let file_shortcut = "ctrl+alt+t";
-        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-        let file_shortcut = "ctrl+alt+t";
-
-        settings.bindings.insert(
-            "transcribe_to_file".to_string(),
-            ShortcutBinding {
-                id: "transcribe_to_file".to_string(),
-                name: "Save to File".to_string(),
-                description: "Saves transcription as markdown file.".to_string(),
-                default_binding: file_shortcut.to_string(),
-                current_binding: file_shortcut.to_string(),
-                paste_to_window: false,
-                save_to_file: true,
-                output_path: Some("Documents/UltraWhisper".to_string()),
-            },
-        );
-
-        // Persist the migrated settings
+    // Migration: remove legacy bindings map; workflows now own hotkeys
+    if !settings.bindings.is_empty() {
+        settings.bindings.clear();
         store.set("settings", serde_json::to_value(&settings).unwrap());
+        log::info!("Removed legacy settings.bindings during migration; use workflows for hotkeys");
     }
 
     settings

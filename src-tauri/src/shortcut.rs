@@ -21,16 +21,10 @@ use crate::ManagedToggleState;
 pub struct WorkflowShortcutRegistry(pub std::sync::Mutex<std::collections::HashMap<String, String>>);
 
 pub fn init_shortcuts(app: &AppHandle) {
-    let settings = settings::load_or_create_app_settings(app);
+    // Register workflow hotkeys only. Legacy settings-driven bindings are deprecated.
+    let _ = settings::load_or_create_app_settings(app);
 
-    // Register legacy bindings first
-    for (_id, binding) in settings.bindings {
-        if let Err(e) = _register_shortcut(app, binding) {
-            eprintln!("Failed to register shortcut {} during init: {}", _id, e);
-        }
-    }
-
-    // Then register workflow hotkeys (if flag enabled)
+    // Register workflow hotkeys (if any are enabled)
     let registered = register_workflow_shortcuts(app);
     if !registered.is_empty() {
         info!("Registered {} workflow hotkey(s)", registered.len());
@@ -684,6 +678,12 @@ fn start_workflow_recording(app: &AppHandle, workflow_id: &str) {
     change_tray_icon(app, TrayIconState::Recording);
     show_recording_overlay(app);
 
+    // Emit app-wide event so UI can reflect active workflow
+    let _ = app.emit(
+        "workflow-recording-started",
+        serde_json::json!({ "workflow_id": workflow_id }),
+    );
+
     // Emit workflow recording started event
     let _ = app.emit("workflow-recording-started", serde_json::json!({ "workflow_id": workflow_id }));
 
@@ -719,6 +719,12 @@ fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
     change_tray_icon(app, TrayIconState::Transcribing);
     show_transcribing_overlay(app);
     play_feedback_sound(app, SoundType::Stop);
+
+    // Emit stopped event immediately so the UI clears promptly
+    let _ = app.emit(
+        "workflow-recording-stopped",
+        serde_json::json!({ "workflow_id": &workflow_id }),
+    );
 
     // Emit workflow recording stopped event (before async work for immediate UI update)
     let _ = app.emit("workflow-recording-stopped", serde_json::json!({ "workflow_id": &workflow_id }));

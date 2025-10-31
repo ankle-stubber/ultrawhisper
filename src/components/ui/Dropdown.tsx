@@ -60,7 +60,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
         type="button"
-        className={`px-2 py-1 text-sm font-semibold uw-bg-surface border uw-border-default rounded min-w-[200px] text-left flex items-center justify-between transition-all duration-150 uw-text-primary ${
+        className={`px-2 py-1 text-sm font-semibold uw-bg-surface border uw-border-default rounded w-full min-w-0 text-left flex items-center justify-between transition-all duration-150 uw-text-primary ${
           disabled
             ? "opacity-50 cursor-not-allowed"
             : "hover:uw-bg-card cursor-pointer hover:uw-border-primary"

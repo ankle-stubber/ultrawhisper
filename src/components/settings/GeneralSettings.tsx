@@ -1,7 +1,6 @@
 import React from "react";
 import { MicrophoneSelector } from "./MicrophoneSelector";
 import { LanguageSelector } from "./LanguageSelector";
-import { HandyShortcut } from "./HandyShortcut";
 import { ConfigCard } from "../shared/ConfigCard";
 import { OutputDeviceSelector } from "./OutputDeviceSelector";
 import { PushToTalk } from "./PushToTalk";
@@ -14,7 +13,6 @@ export const GeneralSettings: React.FC = () => {
   return (
     <div className="space-y-6">
       <ConfigCard title="General">
-        <HandyShortcut descriptionMode="tooltip" grouped={true} />
         <LanguageSelector descriptionMode="tooltip" grouped={true} />
         <PushToTalk descriptionMode="tooltip" grouped={true} />
       </ConfigCard>
