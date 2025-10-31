@@ -21,7 +21,7 @@ export const StreamingSettings: React.FC<StreamingSettingsProps> = React.memo(({
     max_queue_size: 10,
     backpressure_policy: "Block",
     save_streaming_audio: true,
-    enable_backfill: true,
+    enable_backfill: false,
     writer_flush_interval_secs: 5,
     audio_format: "wav",
   };

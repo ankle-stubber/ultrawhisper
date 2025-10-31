@@ -30,6 +30,10 @@ scripts_internal/
 recording_*
 .crush/
 .claude/
+.debug_logs/
+.mcp.json
+debug_logs/
+ui-mockup/
 
 # Icon generation virtual environment
 src-tauri/resources/icon_env/

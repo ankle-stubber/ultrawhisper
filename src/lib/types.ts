@@ -76,7 +76,7 @@ export const StreamingSettingsSchema = z.object({
   max_queue_size: z.number().optional().default(10),
   backpressure_policy: BackpressurePolicySchema.optional().default("Block"),
   save_streaming_audio: z.boolean().optional().default(true),
-  enable_backfill: z.boolean().optional().default(true),
+  enable_backfill: z.boolean().optional().default(false),
   writer_flush_interval_secs: z.number().optional().default(5),
   audio_format: z.string().optional().default("wav"),
 });
