@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { FileText, Send, Monitor } from "lucide-react";
+import { PrimaryButton } from "../shared";
 
 interface DestinationsListProps {
   selectedId: string | null;
@@ -179,23 +180,23 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
 
   // Create menu component
   const CreateMenu: React.FC<{ onSelect: (type: "telegram" | "file_system" | "active_window") => void }> = ({ onSelect }) => (
-    <div className="absolute right-0 top-full mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 min-w-[160px]">
+    <div className="absolute right-0 top-full mt-1 uw-bg-elevated border uw-border-default rounded shadow-lg z-50 min-w-[160px]">
       <button
         ref={firstMenuItemRef}
         onClick={() => onSelect("telegram")}
-        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors focus:bg-logo-primary/10 focus:outline-none"
+        className="w-full px-3 py-2 text-sm text-left uw-text-primary hover:uw-bg-primary-dim transition-colors focus:uw-bg-primary-dim focus:outline-none"
       >
         Telegram
       </button>
       <button
         onClick={() => onSelect("file_system")}
-        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors border-t border-mid-gray/20 focus:bg-logo-primary/10 focus:outline-none"
+        className="w-full px-3 py-2 text-sm text-left uw-text-primary hover:uw-bg-primary-dim transition-colors border-t uw-border-subtle focus:uw-bg-primary-dim focus:outline-none"
       >
         File System
       </button>
       <button
         onClick={() => onSelect("active_window")}
-        className="w-full px-3 py-2 text-sm text-left hover:bg-logo-primary/10 transition-colors border-t border-mid-gray/20 focus:bg-logo-primary/10 focus:outline-none"
+        className="w-full px-3 py-2 text-sm text-left uw-text-primary hover:uw-bg-primary-dim transition-colors border-t uw-border-subtle focus:uw-bg-primary-dim focus:outline-none"
       >
         Active Window
       </button>
@@ -204,50 +205,49 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-mid-gray/20 flex items-center justify-between">
+      <div className="p-4 border-b uw-border-default flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Destinations</h2>
-          <p className="text-xs text-mid-gray mt-1">
+          <h2 className="text-lg font-semibold uw-text-primary">Destinations</h2>
+          <p className="text-xs uw-text-secondary mt-1">
             Configure where transcriptions are sent
           </p>
         </div>
         {sorted.length > 0 && (
           <div className="relative" ref={createMenuRef}>
-            <button
+            <PrimaryButton
               onClick={() => setShowCreateMenu(!showCreateMenu)}
               disabled={isCreating}
-              className="px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              size="sm"
               title="Create new destination"
             >
               + New Destination
-            </button>
+            </PrimaryButton>
 
             {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
           </div>
         )}
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto uw-scroll p-2">
         {loading && (
-          <div className="text-xs text-mid-gray p-2">Loading…</div>
+          <div className="text-xs uw-text-secondary p-2">Loading…</div>
         )}
         {!loading && sorted.length === 0 && (
           <div className="flex flex-col items-center justify-center p-8 text-center gap-4">
             <div>
-              <p className="text-sm font-medium text-foreground mb-1">
+              <p className="text-sm font-medium uw-text-primary mb-1">
                 No destinations yet
               </p>
-              <p className="text-xs text-mid-gray">
+              <p className="text-xs uw-text-secondary">
                 Create your first destination to route transcriptions
               </p>
             </div>
             <div className="relative" ref={createMenuRef}>
-              <button
+              <PrimaryButton
                 onClick={() => setShowCreateMenu(!showCreateMenu)}
                 disabled={isCreating}
-                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isCreating ? "Creating..." : "+ New Destination"}
-              </button>
+              </PrimaryButton>
 
               {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
             </div>
@@ -273,16 +273,16 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
                 key={dest.id}
                 className={`
                   p-3 rounded-lg cursor-pointer transition-all duration-150 mb-2
-                  border border-transparent
+                  border
                   ${isActive
-                    ? "bg-green-500/10 border-green-500/30"
-                    : "hover:bg-gray-900/50 hover:border-gray-700"
+                    ? "uw-bg-primary-dim uw-border-primary uw-text-accent"
+                    : "hover:uw-bg-card hover:border-gray-700 uw-text-primary border-transparent"
                   }
                 `}
                 onClick={() => onSelect(dest.id)}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${config.color} flex-shrink-0`} />
+                  <Icon className={`w-4 h-4 ${isActive ? "uw-text-accent" : config.color} flex-shrink-0`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{dest.name}</p>
                     <div className="flex items-center gap-2 mt-1">

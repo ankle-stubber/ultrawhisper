@@ -10,18 +10,16 @@
   --color-mid-gray: #808080;
 }
 
+/* ============================================
+   THEME SYSTEM - UltraWhisper
+   ============================================ */
+
 :root {
   /* Typography */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 15px;
   line-height: 24px;
   font-weight: 400;
-
-  /* Colors - Light Theme */
-  /* --color-text: #0f0f0f;
-  --color-background: #fbfbfb;
-  --color-logo-primary: #FAA2CA;
-  --color-logo-stroke: #382731;
-  --color-text-stroke: #f6f6f6; */
 
   /* Typography settings */
   font-synthesis: none;
@@ -30,10 +28,212 @@
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 
-  /* Apply colors */
+  /* Terminal/Monospace Font Stack */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
+
+  /* Default Theme Tokens (Terminal - Cyan) */
+  --uw-primary: #1ed7d7;
+  --uw-primary-hover: #15c5c5;
+  --uw-primary-dim: rgba(30, 215, 215, 0.1);
+  --uw-primary-border: rgba(30, 215, 215, 0.3);
+
+  --uw-surface: #0a0e1a;
+  --uw-surface-elevated: #0d1117;
+  --uw-surface-card: rgba(13, 17, 23, 0.5);
+
+  --uw-text: #e1e8f0;
+  --uw-text-secondary: #6b7c93;
+  --uw-text-dim: #4b5563;
+
+  --uw-border: #1a2332;
+  --uw-border-subtle: rgba(26, 35, 50, 0.5);
+
+  --uw-success: #4ade80;
+  --uw-success-dim: rgba(74, 222, 128, 0.1);
+  --uw-success-border: rgba(74, 222, 128, 0.2);
+
+  --uw-warning: #fbbf24;
+  --uw-warning-dim: rgba(251, 191, 36, 0.1);
+  --uw-warning-border: rgba(251, 191, 36, 0.2);
+
+  --uw-error: #ff4458;
+  --uw-error-dim: rgba(255, 68, 88, 0.1);
+  --uw-error-border: rgba(255, 68, 88, 0.3);
+
+  --uw-info: #1ed7d7;
+  --uw-info-dim: rgba(30, 215, 215, 0.1);
+  --uw-info-border: rgba(30, 215, 215, 0.2);
+
+  /* Legacy color compatibility */
+  --color-text: #fbfbfb;
+  --color-background: #2c2b29;
+  --color-logo-primary: #17951e;
+  --color-logo-stroke: #17951e;
+
   color: var(--color-text);
   background-color: var(--color-background);
 }
+
+/* Theme: Terminal (Cyan) - Default */
+.theme-terminal {
+  --uw-primary: #1ed7d7;
+  --uw-primary-hover: #15c5c5;
+  --uw-primary-dim: rgba(30, 215, 215, 0.1);
+  --uw-primary-border: rgba(30, 215, 215, 0.3);
+}
+
+/* Theme: Green (Brand) */
+.theme-green {
+  --uw-primary: #17951e;
+  --uw-primary-hover: #13791a;
+  --uw-primary-dim: rgba(23, 149, 30, 0.1);
+  --uw-primary-border: rgba(23, 149, 30, 0.3);
+}
+
+/* Theme: Amber (Warm) */
+.theme-amber {
+  --uw-primary: #fbbf24;
+  --uw-primary-hover: #f59e0b;
+  --uw-primary-dim: rgba(251, 191, 36, 0.1);
+  --uw-primary-border: rgba(251, 191, 36, 0.3);
+}
+
+/* Theme: Custom (User-defined - injected via JS) */
+.theme-custom {
+  /* CSS variables will be injected inline from themeStore */
+}
+
+/* ============================================
+   SCOPED SCROLLBAR STYLES
+   ============================================ */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.uw-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.uw-scroll::-webkit-scrollbar-track {
+  background: var(--uw-surface);
+  border-radius: 4px;
+}
+
+.uw-scroll::-webkit-scrollbar-thumb {
+  background: var(--uw-border);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.uw-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--uw-text-secondary);
+}
+
+/* Firefox */
+.uw-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--uw-border) var(--uw-surface);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Typography */
+.uw-mono {
+  font-family: var(--font-mono);
+}
+
+/* Colors - Text */
+.uw-text-primary {
+  color: var(--uw-text);
+}
+
+.uw-text-secondary {
+  color: var(--uw-text-secondary);
+}
+
+.uw-text-dim {
+  color: var(--uw-text-dim);
+}
+
+.uw-text-accent {
+  color: var(--uw-primary);
+}
+
+/* Colors - Background */
+.uw-bg-surface {
+  background-color: var(--uw-surface);
+}
+
+.uw-bg-elevated {
+  background-color: var(--uw-surface-elevated);
+}
+
+.uw-bg-card {
+  background-color: var(--uw-surface-card);
+}
+
+.uw-bg-primary {
+  background-color: var(--uw-primary);
+}
+
+.uw-bg-primary-dim {
+  background-color: var(--uw-primary-dim);
+}
+
+/* Colors - Border */
+.uw-border-subtle {
+  border-color: var(--uw-border-subtle);
+}
+
+.uw-border-default {
+  border-color: var(--uw-border);
+}
+
+.uw-border-primary {
+  border-color: var(--uw-primary-border);
+}
+
+/* Status Colors */
+.uw-text-success {
+  color: var(--uw-success);
+}
+
+.uw-bg-success-dim {
+  background-color: var(--uw-success-dim);
+}
+
+.uw-border-success {
+  border-color: var(--uw-success-border);
+}
+
+.uw-text-warning {
+  color: var(--uw-warning);
+}
+
+.uw-bg-warning-dim {
+  background-color: var(--uw-warning-dim);
+}
+
+.uw-border-warning {
+  border-color: var(--uw-warning-border);
+}
+
+.uw-text-error {
+  color: var(--uw-error);
+}
+
+.uw-bg-error-dim {
+  background-color: var(--uw-error-dim);
+}
+
+.uw-border-error {
+  border-color: var(--uw-error-border);
+}
+
+/* ============================================
+   LEGACY STYLES (Compatibility)
+   ============================================ */
 
 .container {
   margin: 0;
@@ -42,16 +242,6 @@
   flex-direction: column;
   justify-content: center;
   text-align: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Colors - Dark Theme */
-    --color-text: #fbfbfb;
-    --color-background: #2c2b29;
-    --color-logo-primary: #17951e;
-    --color-logo-stroke: #17951e;
-  }
 }
 
 @layer utilities {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Sidebar } from "./navigation/Sidebar";
@@ -9,11 +9,18 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { LiveTranscriptionPage } from "./pages/LiveTranscriptionPage";
+import { useThemeStore, initializeTheme } from "../stores/themeStore";
 
 type Page = "monitor" | "workflows" | "destinations" | "models" | "history" | "settings" | "live";
 
 export function NewShellApp() {
   const [currentPage, setCurrentPage] = useState<Page>("monitor");
+  const themeClassName = useThemeStore((state) => state.getThemeClassName());
+
+  // Initialize theme on mount
+  useEffect(() => {
+    initializeTheme();
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -38,7 +45,7 @@ export function NewShellApp() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen bg-gray-950">
+      <div className={`flex h-screen uw-bg-surface ${themeClassName}`}>
         <Toaster position="bottom-right" />
 
         {/* Sidebar Navigation */}

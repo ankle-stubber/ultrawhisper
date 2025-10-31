@@ -1,6 +1,6 @@
 [package]
 name = "ultrawhisper"
-version = "0.1.0"
+version = "0.9.0"
 description = "UltraWhisper - Voice to workflow automation"
 authors = ["ankle-stubber", "cjpais"]
 edition = "2021"

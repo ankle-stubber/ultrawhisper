@@ -6,11 +6,10 @@ import { StoredWorkflow, ModelInfo, TriggerConfig } from "../../lib/types";
 import { Destination } from "../../lib/types";
 import { useSettings } from "../../hooks/useSettings";
 import { useNavigationStore } from "../../stores/navigationStore";
-import { Button } from "../ui/Button";
+import { ConfigCard, ConfigField, PrimaryButton } from "../shared";
 import { Input } from "../ui/Input";
 import { BareToggle } from "../ui/BareToggle";
 import { SettingContainer } from "../ui/SettingContainer";
-import { SettingsGroup } from "../ui/SettingsGroup";
 
 interface WorkflowEditorProps {
   workflowId: string;
@@ -528,9 +527,9 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
 
   return (
     <div className="flex flex-col h-full min-w-0 min-h-0 w-full">
-      <div className="flex-1 p-6 space-y-6 w-full min-w-0 max-w-full">
+      <div className="flex-1 p-6 space-y-6 w-full min-w-0 max-w-full overflow-y-auto uw-scroll">
         {/* General Section */}
-        <SettingsGroup title="General">
+        <ConfigCard title="General">
           <SettingContainer
             title="Name"
             description="Descriptive name for this workflow"
@@ -567,13 +566,13 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               onChange={(e) => updateField("notes", e.target.value || undefined)}
               rows={3}
               placeholder="Additional notes about this workflow..."
-              className="w-full p-2 rounded border border-mid-gray/20 bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-logo-primary"
+              className="w-full p-2 rounded border uw-border-default uw-bg-surface uw-text-primary resize-none focus:outline-none focus:ring-2 focus:uw-border-primary"
             />
           </SettingContainer>
-        </SettingsGroup>
+        </ConfigCard>
 
         {/* Trigger Section */}
-        <SettingsGroup title="Trigger">
+        <ConfigCard title="Trigger">
           <SettingContainer
             title="Type"
             description="How this workflow is triggered"
@@ -656,7 +655,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                         placeholder="/path/to/folder"
                         className="flex-1 w-full"
                       />
-                      <Button
+                      <PrimaryButton
                         variant="secondary"
                         onClick={() => {
                           const newPaths = trigger.paths.filter(
@@ -664,12 +663,13 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                           );
                           updateTriggerField("paths", newPaths);
                         }}
+                        size="sm"
                       >
                         Remove
-                      </Button>
+                      </PrimaryButton>
                     </div>
                   ))}
-                  <Button
+                  <PrimaryButton
                     variant="secondary"
                     onClick={() => {
                       updateTriggerField("paths", [
@@ -679,7 +679,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
                     }}
                   >
                     + Add Path
-                  </Button>
+                  </PrimaryButton>
                 </div>
               </SettingContainer>
 
@@ -741,10 +741,10 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             </>
             );
           })()}
-        </SettingsGroup>
+        </ConfigCard>
 
         {/* Model Section */}
-        <SettingsGroup title="Model">
+        <ConfigCard title="Model">
           <SettingContainer
             title="Model"
             description="Whisper model for transcription"
@@ -752,11 +752,11 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             error={validationErrors.model}
           >
             {downloadedModels.length === 0 && !currentModelInList ? (
-              <div className="text-sm text-mid-gray">
+              <div className="text-sm uw-text-secondary">
                 No models available.{" "}
                 <button
                   onClick={() => setActiveCategory("models")}
-                  className="text-logo-primary hover:underline"
+                  className="uw-text-accent hover:underline"
                 >
                   Manage Models →
                 </button>
@@ -765,7 +765,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               <select
                 value={formData.model.model_id}
                 onChange={(e) => updateModelField("model_id", e.target.value)}
-                className="w-full p-2 rounded border border-mid-gray/20 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-logo-primary"
+                className="w-full p-2 rounded border uw-border-default uw-bg-surface uw-text-primary focus:outline-none focus:ring-2 focus:uw-border-primary"
               >
                 {downloadedModels.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -790,7 +790,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
             <select
               value={formData.model.language}
               onChange={(e) => updateModelField("language", e.target.value)}
-              className="w-full p-2 rounded border border-mid-gray/20 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-logo-primary"
+              className="w-full p-2 rounded border uw-border-default uw-bg-surface uw-text-primary focus:outline-none focus:ring-2 focus:uw-border-primary"
             >
               <option value="auto">Auto-detect</option>
               <option value="en">English</option>
@@ -817,10 +817,10 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
               }
             />
           </SettingContainer>
-        </SettingsGroup>
+        </ConfigCard>
 
         {/* Destinations Section */}
-        <SettingsGroup title="Destinations">
+        <ConfigCard title="Destinations">
           <SettingContainer
             title="Output Destinations"
             description="Where to send transcribed text"
@@ -870,53 +870,53 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({
           </SettingContainer>
 
           {formData.destination_ids.length === 0 && destinations.length > 0 && (
-            <div className="text-sm text-yellow-600 dark:text-yellow-400">
+            <div className="text-sm uw-text-warning">
               ⚠️ At least one destination recommended
             </div>
           )}
-        </SettingsGroup>
+        </ConfigCard>
       </div>
 
       {/* Actions Bar */}
-      <div className="sticky bottom-0 border-t border-mid-gray/20 bg-background p-4 flex gap-3 items-center">
+      <div className="sticky bottom-0 border-t uw-border-default uw-bg-elevated p-4 flex gap-3 items-center">
         {validationErrors.general && (
-          <div className="flex-1 text-sm text-red-600 dark:text-red-400">
+          <div className="flex-1 text-sm uw-text-error">
             {validationErrors.general}
           </div>
         )}
 
         {isDirty && !validationErrors.general && (
-          <div className="flex-1 text-sm text-mid-gray">Unsaved changes</div>
+          <div className="flex-1 text-sm uw-text-secondary">Unsaved changes</div>
         )}
 
         <div className="flex gap-3 ml-auto">
           {isExisting && (
-            <Button
+            <PrimaryButton
               variant="secondary"
               onClick={handleDelete}
               disabled={isDeleting || isSaving}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-600 dark:text-red-400"
+              className="uw-bg-error-dim hover:uw-bg-error uw-text-error hover:text-gray-950"
             >
               {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
+            </PrimaryButton>
           )}
 
-          <Button
+          <PrimaryButton
             variant="secondary"
             onClick={handleDiscard}
             disabled={!isDirty || isSaving || isDeleting}
           >
             Discard
-          </Button>
+          </PrimaryButton>
 
-          <Button
+          <PrimaryButton
             onClick={handleSave}
             disabled={
               isSaving || isDeleting || downloadedModels.length === 0
             }
           >
             {isSaving ? "Saving..." : "Save"}
-          </Button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

@@ -51,7 +51,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
 
   const containerClasses = grouped
     ? "px-4 p-2"
-    : "px-4 p-2 rounded-lg border border-mid-gray/20";
+    : "px-4 p-2 rounded-lg border uw-border-subtle";
 
   if (layout === "stacked") {
     if (descriptionMode === "tooltip") {
@@ -71,7 +71,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
               onClick={toggleTooltip}
             >
               <svg
-                className="w-4 h-4 text-mid-gray cursor-help hover:text-logo-primary transition-colors duration-200 select-none"
+                className="w-4 h-4 uw-text-secondary cursor-help hover:uw-text-accent transition-colors duration-200 select-none"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -93,18 +93,18 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
                 />
               </svg>
               {showTooltip && (
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-background border border-mid-gray/80 rounded-lg shadow-lg z-50 max-w-xs min-w-[200px] whitespace-normal animate-in fade-in-0 zoom-in-95 duration-200">
-                  <p className="text-sm text-center leading-relaxed">
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 uw-bg-elevated border uw-border-default rounded-lg shadow-lg z-50 max-w-xs min-w-[200px] whitespace-normal animate-in fade-in-0 zoom-in-95 duration-200">
+                  <p className="text-sm text-center leading-relaxed uw-text-primary">
                     {description}
                   </p>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-mid-gray/80"></div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-[var(--uw-border)]"></div>
                 </div>
               )}
             </div>
           </div>
           <div className="w-full">{children}</div>
           {error && (
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            <p className="text-sm uw-text-error mt-1">
               {error}
             </p>
           )}
@@ -135,7 +135,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   // Horizontal layout (default)
   const horizontalContainerClasses = grouped
     ? "flex items-center justify-between px-4 p-2"
-    : "flex items-center justify-between px-4 p-2 rounded-lg border border-mid-gray/20";
+    : "flex items-center justify-between px-4 p-2 rounded-lg border uw-border-subtle";
 
   if (descriptionMode === "tooltip") {
     return (
@@ -155,7 +155,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
               onClick={toggleTooltip}
             >
               <svg
-                className="w-4 h-4 text-mid-gray cursor-help hover:text-logo-primary transition-colors duration-200 select-none"
+                className="w-4 h-4 uw-text-secondary cursor-help hover:uw-text-accent transition-colors duration-200 select-none"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -177,17 +177,17 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
                 />
               </svg>
               {showTooltip && (
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-background border border-mid-gray/80 rounded-lg shadow-lg z-50 max-w-xs min-w-[200px] whitespace-normal animate-in fade-in-0 zoom-in-95 duration-200">
-                  <p className="text-sm text-center leading-relaxed">
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 uw-bg-elevated border uw-border-default rounded-lg shadow-lg z-50 max-w-xs min-w-[200px] whitespace-normal animate-in fade-in-0 zoom-in-95 duration-200">
+                  <p className="text-sm text-center leading-relaxed uw-text-primary">
                     {description}
                   </p>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-mid-gray/80"></div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-[var(--uw-border)]"></div>
                 </div>
               )}
             </div>
           </div>
           {error && (
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+            <p className="text-sm uw-text-error mt-1">
               {error}
             </p>
           )}
@@ -203,11 +203,11 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
         <h3 className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>
           {heading}
         </h3>
-        <p className={`text-sm ${disabled ? "opacity-50" : ""}`}>
+        <p className={`text-sm uw-text-secondary ${disabled ? "opacity-50" : ""}`}>
           {description}
         </p>
         {error && (
-          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+          <p className="text-sm uw-text-error mt-1">
             {error}
           </p>
         )}
