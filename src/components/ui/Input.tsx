@@ -9,7 +9,7 @@ export const Input: React.FC<InputProps> = ({
   variant = "default",
   ...props
 }) => {
-  const baseClasses = "px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 rounded text-left flex items-center justify-between transition-all duration-150 hover:bg-logo-primary/10 hover:border-logo-primary focus:outline-none focus:bg-logo-primary/20 focus:border-logo-primary";
+  const baseClasses = "px-2 py-1 text-sm font-semibold uw-bg-surface border uw-border-default rounded uw-text-primary text-left flex items-center justify-between transition-all duration-150 hover:uw-bg-card hover:uw-border-primary focus:outline-none focus:uw-bg-card focus:uw-border-primary";
   
   const variantClasses = {
     default: "px-3 py-2",

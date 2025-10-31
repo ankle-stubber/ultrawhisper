@@ -8,14 +8,14 @@ interface ModelDetailProps {
 export const ModelDetail: React.FC<ModelDetailProps> = ({ modelId }) => {
   if (!modelId) {
     return (
-      <div className="flex items-center justify-center h-full text-mid-gray">
+      <div className="flex items-center justify-center h-full uw-text-secondary">
         <p>Select model management</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto uw-scroll">
       <div className="flex flex-col items-center p-4 gap-4">
         <ModelSelector />
       </div>

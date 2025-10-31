@@ -14,20 +14,20 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-mid-gray/20">
-        <h2 className="text-lg font-semibold">History</h2>
-        <p className="text-xs text-mid-gray mt-1">
+      <div className="p-4 border-b uw-border-default">
+        <h2 className="text-lg font-semibold uw-text-primary">History</h2>
+        <p className="text-xs uw-text-secondary mt-1">
           View past transcriptions
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto uw-scroll p-2">
         {items.map((item) => (
           <div
             key={item.id}
             className={`p-3 rounded-lg cursor-pointer transition-colors mb-1 ${
               selectedId === item.id
-                ? "bg-logo-primary/80"
-                : "hover:bg-mid-gray/20"
+                ? "uw-bg-primary-dim uw-text-accent"
+                : "hover:uw-bg-card uw-text-primary"
             }`}
             onClick={() => onSelect(item.id)}
           >

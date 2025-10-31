@@ -60,10 +60,10 @@ export const Dropdown: React.FC<DropdownProps> = ({
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
         type="button"
-        className={`px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 rounded min-w-[200px] text-left flex items-center justify-between transition-all duration-150 ${
+        className={`px-2 py-1 text-sm font-semibold uw-bg-surface border uw-border-default rounded min-w-[200px] text-left flex items-center justify-between transition-all duration-150 uw-text-primary ${
           disabled
             ? "opacity-50 cursor-not-allowed"
-            : "hover:bg-logo-primary/10 cursor-pointer hover:border-logo-primary"
+            : "hover:uw-bg-card cursor-pointer hover:uw-border-primary"
         }`}
         onClick={handleToggle}
         disabled={disabled}
@@ -84,9 +84,9 @@ export const Dropdown: React.FC<DropdownProps> = ({
         </svg>
       </button>
       {isOpen && !disabled && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 uw-bg-elevated border uw-border-default rounded shadow-lg z-50 max-h-60 overflow-y-auto uw-scroll">
           {options.length === 0 ? (
-            <div className="px-2 py-1 text-sm text-mid-gray">
+            <div className="px-2 py-1 text-sm uw-text-secondary">
               No options found
             </div>
           ) : (
@@ -94,9 +94,9 @@ export const Dropdown: React.FC<DropdownProps> = ({
               <button
                 key={option.value}
                 type="button"
-                className={`w-full px-2 py-1 text-sm text-left hover:bg-logo-primary/10 transition-colors duration-150 ${
+                className={`w-full px-2 py-1 text-sm text-left uw-text-primary hover:uw-bg-primary-dim transition-colors duration-150 ${
                   selectedValue === option.value
-                    ? "bg-logo-primary/20 font-semibold"
+                    ? "uw-bg-primary-dim font-semibold uw-text-accent"
                     : ""
                 } ${option.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
                 onClick={() => handleSelect(option.value)}

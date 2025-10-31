@@ -4,10 +4,8 @@ import { toast } from "sonner";
 import { TelegramSetup } from "./TelegramSetup";
 import FileSystemSetup from "./FileSystemSetup";
 import ActiveWindowSetup from "./ActiveWindowSetup";
-import { SettingsGroup } from "../ui/SettingsGroup";
-import { SettingContainer } from "../ui/SettingContainer";
+import { ConfigCard, ConfigField, PrimaryButton } from "../shared";
 import { Input } from "../ui/Input";
-import { Button } from "../ui/Button";
 
 interface DestinationDetailProps {
   destinationId: string | null;
@@ -67,7 +65,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
   // Early returns for loading states
   if (!destinationId) {
     return (
-      <div className="flex items-center justify-center h-full text-mid-gray">
+      <div className="flex items-center justify-center h-full uw-text-secondary">
         <p>Select a destination to configure</p>
       </div>
     );
@@ -75,7 +73,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-mid-gray">
+      <div className="flex items-center justify-center h-full uw-text-secondary">
         <p>Loading…</p>
       </div>
     );
@@ -83,7 +81,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
 
   if (!dest) {
     return (
-      <div className="flex items-center justify-center h-full text-mid-gray">
+      <div className="flex items-center justify-center h-full uw-text-secondary">
         <p>Destination not found</p>
       </div>
     );
@@ -170,16 +168,13 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
 
   // Single return with General section + type-specific editor
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto">
+    <div className="flex-1 overflow-y-auto uw-scroll">
+      <div className="p-6 max-w-2xl mx-auto">
         {/* General Section - always rendered */}
-        <SettingsGroup title="GENERAL" description="Basic destination information">
-          <SettingContainer
-            title="Name"
-            description="Label shown in lists and pickers"
-            layout="stacked"
-            descriptionMode="inline"
-            grouped
+        <ConfigCard title="General">
+          <ConfigField
+            label="Name"
+            hint="Label shown in lists and pickers"
           >
             <Input
               value={name}
@@ -188,26 +183,28 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
               disabled={isSavingName}
               className="w-full"
             />
-            <div className="flex gap-2 justify-end mt-2">
-              <Button
-                variant="secondary"
-                onClick={handleRevertName}
-                disabled={!isNameDirty || isSavingName}
-                size="sm"
-              >
-                Revert
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSaveName}
-                disabled={!isNameDirty || !name.trim() || isSavingName}
-                size="sm"
-              >
-                {isSavingName ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </SettingContainer>
-        </SettingsGroup>
+            {isNameDirty && (
+              <div className="flex gap-2 justify-end mt-2">
+                <PrimaryButton
+                  variant="secondary"
+                  onClick={handleRevertName}
+                  disabled={isSavingName}
+                  size="sm"
+                >
+                  Revert
+                </PrimaryButton>
+                <PrimaryButton
+                  variant="primary"
+                  onClick={handleSaveName}
+                  disabled={!name.trim() || isSavingName}
+                  size="sm"
+                >
+                  {isSavingName ? "Saving..." : "Save"}
+                </PrimaryButton>
+              </div>
+            )}
+          </ConfigField>
+        </ConfigCard>
 
         {/* Type-specific editor */}
         {dest.config.type === "telegram" && (

@@ -10,7 +10,7 @@ export const WorkflowDetail: React.FC<WorkflowDetailProps> = ({
 }) => {
   if (!workflowId) {
     return (
-      <div className="flex items-center justify-center h-full text-mid-gray">
+      <div className="flex items-center justify-center h-full uw-text-secondary">
         <p>Select a workflow to view details</p>
       </div>
     );

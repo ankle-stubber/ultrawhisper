@@ -1,44 +1,75 @@
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { Mic, Package, Activity, Shield, Circle } from "lucide-react";
 import { LogsList } from "../logs/LogsList";
 import { LogsDetail } from "../logs/LogsDetail";
+import { PageHeader } from "../shared";
 import { useSettings } from "../../hooks/useSettings";
+
+type StatusType = "idle" | "active" | "recording" | "error" | "loading";
 
 interface StatusCardProps {
   icon: React.ElementType;
   title: string;
   value: string;
-  status?: "idle" | "active" | "error" | "loading";
+  status?: StatusType;
 }
 
 function StatusCard({ icon: Icon, title, value, status = "idle" }: StatusCardProps) {
-  const statusColors = {
-    idle: "text-gray-400 border-gray-800",
-    active: "text-green-500 border-green-500/20",
-    error: "text-red-500 border-red-500/20",
-    loading: "text-amber-500 border-amber-500/20",
-  } as const;
+  // Explicit color maps (no string parsing)
+  const statusStyles: Record<StatusType, {
+    iconColor: string;
+    textColor: string;
+    borderColor: string;
+    bgColor: string;
+  }> = {
+    idle: {
+      iconColor: "text-gray-400",
+      textColor: "text-gray-300",
+      borderColor: "border-gray-800",
+      bgColor: "bg-gray-900/50",
+    },
+    active: {
+      iconColor: "uw-text-success",
+      textColor: "uw-text-success",
+      borderColor: "uw-border-success",
+      bgColor: "uw-bg-success-dim",
+    },
+    recording: {
+      iconColor: "uw-text-error",
+      textColor: "uw-text-error",
+      borderColor: "uw-border-error",
+      bgColor: "uw-bg-error-dim",
+    },
+    error: {
+      iconColor: "uw-text-error",
+      textColor: "uw-text-error",
+      borderColor: "uw-border-error",
+      bgColor: "uw-bg-error-dim",
+    },
+    loading: {
+      iconColor: "uw-text-warning",
+      textColor: "uw-text-warning",
+      borderColor: "uw-border-warning",
+      bgColor: "uw-bg-warning-dim",
+    },
+  };
 
-  const bgColors = {
-    idle: "bg-gray-900/50",
-    active: "bg-green-500/5",
-    error: "bg-red-500/5",
-    loading: "bg-amber-500/5",
-  } as const;
+  const styles = statusStyles[status];
 
   return (
-    <div className={`p-4 rounded-lg border ${statusColors[status]} ${bgColors[status]} transition-all duration-200`}>
+    <div className={`p-4 rounded-lg border ${styles.borderColor} ${styles.bgColor} transition-all duration-200`}>
       <div className="flex items-center gap-3">
-        <Icon className={`w-5 h-5 ${statusColors[status].split(' ')[0]}`} />
+        <Icon className={`w-5 h-5 ${styles.iconColor}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-500 uppercase tracking-wider">{title}</p>
-          <p className={`text-sm font-medium mt-1 truncate ${status === "idle" ? "text-gray-300" : ""}`}>
+          <p className="text-xs uw-text-secondary uppercase tracking-wider">{title}</p>
+          <p className={`text-sm font-medium mt-1 truncate ${styles.textColor}`}>
             {value}
           </p>
         </div>
-        {status === "active" && (
-          <Circle className="w-2 h-2 text-green-500 animate-pulse" fill="currentColor" />
+        {(status === "active" || status === "recording") && (
+          <Circle className={`w-2 h-2 ${styles.iconColor} animate-pulse`} fill="currentColor" />
         )}
       </div>
     </div>
@@ -49,7 +80,57 @@ export function SystemMonitorPage() {
   const [selectedLogId, setSelectedLogId] = useState<string | null>("application-logs");
   const [isRecording, setIsRecording] = useState(false);
   const [modelStatus, setModelStatus] = useState<string>("Ready");
+  const [modelName, setModelName] = useState<string>("");
+  const [cachedModelName, setCachedModelName] = useState<string>("");
   const { settings } = useSettings();
+
+  // Fetch model info with correct param name
+  useEffect(() => {
+    const fetchModelInfo = async () => {
+      try {
+        let modelId = settings?.selected_model;
+
+        // Fallback: get current model if no selected_model
+        if (!modelId) {
+          modelId = await invoke<string>("get_current_model");
+        }
+
+        if (modelId) {
+          const info = await invoke<{ name: string }>("get_model_info", {
+            modelId
+          });
+
+          if (info?.name) {
+            setModelName(info.name);
+            setCachedModelName(info.name); // Cache to avoid flicker
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch model info:", error);
+        // Keep using cached name if fetch fails
+        if (cachedModelName) {
+          setModelName(cachedModelName);
+        }
+      }
+    };
+
+    if (modelStatus === "Ready") {
+      fetchModelInfo();
+    }
+  }, [modelStatus, settings?.selected_model, cachedModelName]);
+
+  // Resolve microphone label
+  const getMicrophoneLabel = (): string => {
+    const selected = settings?.selected_microphone || "Default";
+
+    if (selected === "Default" || selected === "default") {
+      // Best-effort: try to get actual default device name
+      // This would require accessing the audio devices list
+      return "System Default";
+    }
+
+    return selected;
+  };
 
   // Listen for events to show status
   useEffect(() => {
@@ -93,49 +174,77 @@ export function SystemMonitorPage() {
   }, []);
 
   // Determine status for each card
-  const getModelCardStatus = () => {
+  const getModelCardStatus = (): StatusType => {
     if (modelStatus === "Loading") return "loading";
     if (modelStatus === "Error") return "error";
     if (modelStatus === "Ready") return "active";
     return "idle";
   };
 
-  const getMicrophoneStatus = () => {
+  const getMicrophoneStatus = (): StatusType => {
     if (settings?.always_on_microphone) return "active";
     return settings?.selected_microphone ? "idle" : "error";
   };
 
+  // Get model display value
+  const getModelValue = (): string => {
+    if (modelStatus === "Ready" && modelName) {
+      return modelName;
+    }
+    return modelStatus;
+  };
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-gray-950">
+    <div className="flex-1 flex flex-col h-full uw-bg-surface">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-800">
-        <h1 className="text-2xl font-semibold text-gray-100">System Monitor</h1>
-        <p className="text-sm text-gray-400 mt-1">Application logs and activity</p>
+      <PageHeader
+        title="System Monitor"
+        subtitle="Real-time application status and logs"
+      />
+
+      {/* Stats Bar */}
+      <div className="px-6 py-4 border-b uw-border-default uw-bg-card">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uw-text-secondary uppercase tracking-wider">Status</span>
+            <span className={`uw-mono text-lg font-semibold ${isRecording ? "uw-text-error" : "uw-text-accent"}`}>
+              {isRecording ? "RECORDING" : "IDLE"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uw-text-secondary uppercase tracking-wider">Model</span>
+            <span className="uw-mono text-sm font-medium uw-text-primary">
+              {modelName || modelStatus}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uw-text-secondary uppercase tracking-wider">Mic</span>
+            <span className="uw-mono text-sm font-medium uw-text-primary">
+              {getMicrophoneLabel()}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Status Cards Grid */}
-      <div className="px-6 py-4 border-b border-gray-800 bg-gray-900/30">
+      <div className="px-6 py-4 border-b uw-border-default uw-bg-card">
         <div className="grid grid-cols-4 gap-4">
           <StatusCard
             icon={Activity}
             title="Recording"
             value={isRecording ? "Active" : "Idle"}
-            status={isRecording ? "active" : "idle"}
+            status={isRecording ? "recording" : "idle"}
           />
           <StatusCard
             icon={Package}
             title="Model"
-            value={modelStatus}
+            value={getModelValue()}
             status={getModelCardStatus()}
           />
           <StatusCard
             icon={Mic}
             title="Microphone"
-            value={
-              settings?.always_on_microphone
-                ? "Always On"
-                : settings?.selected_microphone || "None"
-            }
+            value={getMicrophoneLabel()}
             status={getMicrophoneStatus()}
           />
           <StatusCard
@@ -150,7 +259,7 @@ export function SystemMonitorPage() {
       {/* Content - Two Panel Layout */}
       <div className="flex-1 flex overflow-hidden">
           {/* Left Panel - Logs List */}
-          <div className="w-80 border-r border-gray-800 overflow-y-auto bg-gray-900/50">
+          <div className="w-80 border-r uw-border-default overflow-y-auto uw-scroll uw-bg-elevated">
             <LogsList
               selectedId={selectedLogId}
               onSelect={setSelectedLogId}
@@ -158,7 +267,7 @@ export function SystemMonitorPage() {
           </div>
 
           {/* Right Panel - Log Details */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto uw-scroll">
             <LogsDetail logId={selectedLogId} />
           </div>
       </div>
