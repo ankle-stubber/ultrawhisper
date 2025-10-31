@@ -1,6 +1,7 @@
 use crate::streaming::queue::BackpressurePolicy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use serde_json::Value as JsonValue;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -293,7 +294,7 @@ fn default_save_streaming_audio() -> bool {
 }
 
 fn default_enable_backfill() -> bool {
-    true
+    false
 }
 
 fn default_writer_flush_interval_secs() -> u32 {
@@ -556,8 +557,14 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         .expect("Failed to initialize store");
 
     if let Some(settings_value) = store.get("settings") {
-        serde_json::from_value::<AppSettings>(settings_value)
-            .unwrap_or_else(|_| get_default_settings())
+        // Merge config overrides (if any) before deserializing
+        let mut json: JsonValue = settings_value;
+        #[allow(dead_code)]
+        {
+            // If the config_overrides module is available, merge in-memory overrides
+            crate::config_overrides::merge_overrides(&mut json);
+        }
+        serde_json::from_value::<AppSettings>(json).unwrap_or_else(|_| get_default_settings())
     } else {
         get_default_settings()
     }
@@ -608,7 +615,7 @@ mod tests {
 
         // Verify Phase 3 defaults
         assert_eq!(settings.save_streaming_audio, true);
-        assert_eq!(settings.enable_backfill, true);
+        assert_eq!(settings.enable_backfill, false);
         assert_eq!(settings.writer_flush_interval_secs, 5);
         assert_eq!(settings.audio_format, "wav");
     }

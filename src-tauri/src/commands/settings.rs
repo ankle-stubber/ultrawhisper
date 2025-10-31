@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -27,6 +27,14 @@ pub fn pick_directory(app: AppHandle) -> Result<Option<String>, String> {
             Ok(None)
         }
     }
+}
+
+#[tauri::command]
+pub fn reload_config_overrides(app: AppHandle) -> Result<(), String> {
+    crate::config_overrides::reload_config_overrides(&app);
+    // Also emit settings-changed so UI can refresh views if needed
+    let _ = app.emit("settings-changed", serde_json::json!({"setting": "config_overrides", "reloaded": true }));
+    Ok(())
 }
 
 #[tauri::command]

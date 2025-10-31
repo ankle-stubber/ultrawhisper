@@ -296,13 +296,14 @@ fn run_consumer(
         if let Some(proc_samples) = processed {
             // Send to streaming channel if active
             if let Some(tx) = streaming_tx {
-                // Blocking send - we're in consumer thread, not CPAL thread, so this is safe
-                // If receiver is gone, channel will error and we just ignore it
-                let _ = tx.send(proc_samples.clone());
+                // Streaming mode: deliver frames downstream but do NOT accumulate
+                // large buffers locally to avoid unbounded memory growth during
+                // long recordings.
+                let _ = tx.send(proc_samples);
+            } else {
+                // Batch mode: accumulate for return on Stop
+                out_buf.extend_from_slice(&proc_samples);
             }
-
-            // Also accumulate for batch mode
-            out_buf.extend_from_slice(&proc_samples);
         }
     }
 
@@ -365,8 +366,10 @@ fn run_consumer(
                     // Close the streaming channel
                     streaming_tx = None;
 
-                    // Clear accumulated samples (not returned in streaming mode)
+                    // Clear any residual capacity; we don't use accumulated
+                    // samples in streaming mode.
                     processed_samples.clear();
+                    processed_samples.shrink_to_fit();
                 }
                 Cmd::Shutdown => return,
             }

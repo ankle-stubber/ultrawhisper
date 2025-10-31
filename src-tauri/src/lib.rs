@@ -4,6 +4,7 @@ pub mod audio_toolkit;
 mod clipboard;
 mod commands;
 mod destinations;
+mod config_overrides;
 mod file_output;
 mod logger;
 mod managers;
@@ -188,10 +189,42 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     let log_manager = Arc::new(LogManager::new(app_handle.clone()));
     app_handle.manage(log_manager.clone());
 
-    // Initialize the combined logger (forwards to env_logger + captures to LogManager)
-    if let Err(e) = crate::logger::CombinedLogger::init(log_manager.clone()) {
+    // Initialize the combined logger (stdout + in-memory + file sinks)
+    // Primary: app data logs/ultrawhisper-<ts>.log
+    let mut log_paths: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(dir) = app_handle.path().app_data_dir() {
+        let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        log_paths.push(dir.join("logs").join(format!("ultrawhisper-{}.log", ts)));
+    }
+
+    // Secondary (dev): ULTRAWHISPER_DEV_LOG_DIR or ./debug_logs if available
+    let dev_dir = std::env::var("ULTRAWHISPER_DEV_LOG_DIR").ok().map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::current_dir().ok().and_then(|cwd| {
+                let here = cwd.join("debug_logs");
+                if here.exists() { Some(here) } else {
+                    let parent = cwd.parent().map(|p| p.join("debug_logs"));
+                    parent.filter(|p| p.exists())
+                }
+            })
+        });
+    if let Some(mut dev) = dev_dir {
+        let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        dev.push(format!("ultrawhisper-{}.log", ts));
+        log_paths.push(dev);
+    }
+
+    if !log_paths.is_empty() {
+        if let Err(e) = crate::logger::CombinedLogger::init_with_files(log_manager.clone(), log_paths) {
+            eprintln!("Failed to initialize multi-file logger, falling back to default: {}", e);
+            let _ = crate::logger::CombinedLogger::init(log_manager.clone());
+        }
+    } else if let Err(e) = crate::logger::CombinedLogger::init(log_manager.clone()) {
         eprintln!("Failed to initialize logger: {}", e);
     }
+
+    // Apply config overrides (dev overlay) at startup
+    config_overrides::apply_startup_overrides(app_handle);
 
     // Log startup message to test logger
     log::info!("UltraWhisper starting up - logging system initialized");
@@ -459,6 +492,7 @@ pub fn run() {
             commands::history::update_history_limit,
             commands::settings::pick_directory,
             commands::settings::change_use_workflow_engine_setting,
+            commands::settings::reload_config_overrides,
             commands::settings::change_streaming_settings,
             commands::telegram::store_telegram_credentials,
             commands::telegram::get_telegram_credentials,
