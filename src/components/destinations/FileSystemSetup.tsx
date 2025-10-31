@@ -119,7 +119,7 @@ export default function FileSystemSetup({ config, onSave }: FileSystemSetupProps
   };
 
   return (
-    <div className="w-full max-w-2xl space-y-4">
+    <div className="w-full space-y-4">
       <SettingsGroup title="FILE SYSTEM CONFIGURATION" description="Configure where and how transcriptions are saved">
         <SettingContainer
           title="Output Path"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { SettingsGroup } from "../ui/SettingsGroup";
+import { ConfigCard } from "../shared/ConfigCard";
 import { SettingContainer } from "../ui/SettingContainer";
 import { Button } from "../ui/Button";
 
@@ -31,8 +31,8 @@ export const AboutSettings: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-6">
-      <SettingsGroup title="About">
+    <div className="space-y-6">
+      <ConfigCard title="About">
         <SettingContainer
           title="Version"
           description="Current version of UltraWhisper"
@@ -56,9 +56,9 @@ export const AboutSettings: React.FC = () => {
             UltraWhisper on GitHub
           </Button>
         </SettingContainer>
-      </SettingsGroup>
+      </ConfigCard>
 
-      <SettingsGroup title="Acknowledgments">
+      <ConfigCard title="Acknowledgments">
         <SettingContainer
           title="Handy"
           description="UltraWhisper is built on the foundation of Handy"
@@ -102,7 +102,7 @@ export const AboutSettings: React.FC = () => {
             contributors.
           </div>
         </SettingContainer>
-      </SettingsGroup>
+      </ConfigCard>
     </div>
   );
 };

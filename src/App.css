@@ -109,29 +109,28 @@
 
 /* Webkit browsers (Chrome, Safari, Edge) */
 .uw-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .uw-scroll::-webkit-scrollbar-track {
-  background: var(--uw-surface);
-  border-radius: 4px;
+  background: transparent;
 }
 
 .uw-scroll::-webkit-scrollbar-thumb {
-  background: var(--uw-border);
-  border-radius: 4px;
+  background: rgba(107, 124, 147, 0.3);
+  border-radius: 3px;
   transition: background 0.2s;
 }
 
 .uw-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--uw-text-secondary);
+  background: rgba(107, 124, 147, 0.5);
 }
 
 /* Firefox */
 .uw-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--uw-border) var(--uw-surface);
+  scrollbar-color: rgba(107, 124, 147, 0.3) transparent;
 }
 
 /* ============================================

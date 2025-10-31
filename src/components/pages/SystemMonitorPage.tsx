@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { Mic, Package, Activity, Shield, Circle } from "lucide-react";
+import { Mic, Package, Activity, Zap, Circle } from "lucide-react";
 import { LogsList } from "../logs/LogsList";
 import { LogsDetail } from "../logs/LogsDetail";
 import { PageHeader } from "../shared";
 import { useSettings } from "../../hooks/useSettings";
+import { useWorkflows } from "../../hooks/useWorkflows";
 
 type StatusType = "idle" | "active" | "recording" | "error" | "loading";
 
@@ -82,7 +83,9 @@ export function SystemMonitorPage() {
   const [modelStatus, setModelStatus] = useState<string>("Ready");
   const [modelName, setModelName] = useState<string>("");
   const [cachedModelName, setCachedModelName] = useState<string>("");
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const { settings } = useSettings();
+  const { workflows } = useWorkflows();
 
   // Fetch model info with correct param name
   useEffect(() => {
@@ -97,7 +100,9 @@ export function SystemMonitorPage() {
 
         if (modelId) {
           const info = await invoke<{ name: string }>("get_model_info", {
-            modelId
+            // Tauri expects `model_id`; include both to be robust across bindings
+            modelId,
+            model_id: modelId,
           });
 
           if (info?.name) {
@@ -165,6 +170,19 @@ export function SystemMonitorPage() {
         }
       );
       cleanups.push(unlistenModelState);
+
+      // Workflow recording events
+      const unlistenWorkflowStarted = await listen<{ workflow_id: string }>(
+        "workflow-recording-started",
+        (event) => setActiveWorkflowId(event.payload.workflow_id)
+      );
+      cleanups.push(unlistenWorkflowStarted);
+
+      const unlistenWorkflowStopped = await listen<{ workflow_id: string }>(
+        "workflow-recording-stopped",
+        () => setActiveWorkflowId(null)
+      );
+      cleanups.push(unlistenWorkflowStopped);
     })();
 
     return () => {
@@ -223,6 +241,21 @@ export function SystemMonitorPage() {
               {getMicrophoneLabel()}
             </span>
           </div>
+          {isRecording && activeWorkflowId && (() => {
+            const activeWorkflow = workflows.find(w => w.id === activeWorkflowId);
+            if (activeWorkflow) {
+              const hotkey = activeWorkflow.trigger?.type === "Hotkey" ? activeWorkflow.trigger.binding : "";
+              return (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs uw-text-secondary uppercase tracking-wider">Workflow</span>
+                  <span className="uw-mono text-sm font-medium uw-text-primary">
+                    {activeWorkflow.name}{hotkey ? ` • ${hotkey}` : ""}
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 
@@ -248,9 +281,9 @@ export function SystemMonitorPage() {
             status={getMicrophoneStatus()}
           />
           <StatusCard
-            icon={Shield}
-            title="VAD"
-            value="Silero (smoothed)"
+            icon={Zap}
+            title="Workflows"
+            value={`${workflows.length} Configured`}
             status="idle"
           />
         </div>

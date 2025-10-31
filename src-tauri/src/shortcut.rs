@@ -684,6 +684,9 @@ fn start_workflow_recording(app: &AppHandle, workflow_id: &str) {
     change_tray_icon(app, TrayIconState::Recording);
     show_recording_overlay(app);
 
+    // Emit workflow recording started event
+    let _ = app.emit("workflow-recording-started", serde_json::json!({ "workflow_id": workflow_id }));
+
     let rm = app.state::<Arc<AudioRecordingManager>>();
 
     // For MVP, use batch (non-streaming) mode
@@ -716,6 +719,9 @@ fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
     change_tray_icon(app, TrayIconState::Transcribing);
     show_transcribing_overlay(app);
     play_feedback_sound(app, SoundType::Stop);
+
+    // Emit workflow recording stopped event (before async work for immediate UI update)
+    let _ = app.emit("workflow-recording-stopped", serde_json::json!({ "workflow_id": &workflow_id }));
 
     // Stop recording and get samples
     tauri::async_runtime::spawn(async move {

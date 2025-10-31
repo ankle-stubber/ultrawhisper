@@ -16,7 +16,7 @@ export const HistoryDetail: React.FC<HistoryDetailProps> = ({ historyId }) => {
 
   return (
     <div className="flex-1 overflow-y-auto uw-scroll">
-      <div className="flex flex-col items-center p-4 gap-4">
+      <div className="p-6">
         <HistorySettings />
       </div>
     </div>

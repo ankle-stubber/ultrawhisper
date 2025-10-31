@@ -169,7 +169,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
   // Single return with General section + type-specific editor
   return (
     <div className="flex-1 overflow-y-auto uw-scroll">
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className="p-6">
         {/* General Section - always rendered */}
         <ConfigCard title="General">
           <ConfigField

@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, ZapOff, Keyboard } from "lucide-react";
+import { Zap, ZapOff } from "lucide-react";
 import { useWorkflows } from "../../hooks/useWorkflows";
 import { StoredWorkflow } from "../../lib/types";
 import { PrimaryButton } from "../shared";
@@ -79,30 +79,27 @@ export const WorkflowsList: React.FC<WorkflowsListProps> = ({
               `}
               onClick={() => onSelect(workflow.id)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  {isEnabled ? (
-                    <Zap className="w-4 h-4 uw-text-accent flex-shrink-0" />
-                  ) : (
-                    <ZapOff className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  )}
+              <div className="flex items-start gap-2">
+                {isEnabled ? (
+                  <Zap className="w-4 h-4 uw-text-accent flex-shrink-0 mt-0.5" />
+                ) : (
+                  <ZapOff className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {!isEnabled && (
+                      <span className="px-2 py-0.5 text-xs rounded-full uw-bg-card uw-text-dim border border-gray-700">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
                   <p className={`text-sm font-medium truncate ${!isEnabled ? "opacity-60" : ""}`}>
                     {workflow.name}
                   </p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
                   {workflow.trigger?.type === "Hotkey" && (
-                    <div className="flex items-center gap-1">
-                      <Keyboard className="w-3 h-3 uw-text-secondary" />
-                      <span className="text-xs uw-mono uw-text-secondary">
-                        {workflow.trigger.binding}
-                      </span>
-                    </div>
-                  )}
-                  {!isEnabled && (
-                    <span className="text-xs uw-text-dim uw-bg-card px-2 py-0.5 rounded">
-                      Off
-                    </span>
+                    <p className="text-xs uw-text-secondary mt-1 uw-mono">
+                      {workflow.trigger.binding}
+                    </p>
                   )}
                 </div>
               </div>
