@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
+import { FileText, Send, Monitor } from "lucide-react";
 
 interface DestinationsListProps {
   selectedId: string | null;
@@ -253,20 +254,47 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
           </div>
         )}
         {!loading &&
-          sorted.map((dest) => (
-            <div
-              key={dest.id}
-              className={`p-3 rounded-lg cursor-pointer transition-colors mb-1 ${
-                selectedId === dest.id
-                  ? "bg-logo-primary/80"
-                  : "hover:bg-mid-gray/20"
-              }`}
-              onClick={() => onSelect(dest.id)}
-            >
-              <p className="text-sm font-medium">{dest.name}</p>
-              <p className="text-xs text-mid-gray mt-0.5">{typeLabel(dest.config)}</p>
-            </div>
-          ))}
+          sorted.map((dest) => {
+            const isActive = selectedId === dest.id;
+            const type = dest.config.type;
+
+            // Type icons and colors
+            const typeConfig = {
+              telegram: { icon: Send, color: "text-blue-500", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/20" },
+              file_system: { icon: FileText, color: "text-amber-500", bgColor: "bg-amber-500/10", borderColor: "border-amber-500/20" },
+              active_window: { icon: Monitor, color: "text-green-500", bgColor: "bg-green-500/10", borderColor: "border-green-500/20" },
+            };
+
+            const config = typeConfig[type] || typeConfig.active_window;
+            const Icon = config.icon;
+
+            return (
+              <div
+                key={dest.id}
+                className={`
+                  p-3 rounded-lg cursor-pointer transition-all duration-150 mb-2
+                  border border-transparent
+                  ${isActive
+                    ? "bg-green-500/10 border-green-500/30"
+                    : "hover:bg-gray-900/50 hover:border-gray-700"
+                  }
+                `}
+                onClick={() => onSelect(dest.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 ${config.color} flex-shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{dest.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${config.bgColor} ${config.borderColor} border`}>
+                        {typeLabel(dest.config)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
       </div>
     </div>
   );

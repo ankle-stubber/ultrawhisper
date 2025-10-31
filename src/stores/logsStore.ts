@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { LogEntry, LogFilter } from "../lib/types";
+import { debounce } from "../lib/debounce";
 
 interface LogsStore {
   logs: LogEntry[];
@@ -72,10 +73,14 @@ export const useLogsStore = create<LogsStore>((set, get) => ({
     // Load initial logs
     await get().loadLogs();
 
+    // Create debounced version of loadLogs (75ms delay for smooth UI)
+    const debouncedLoadLogs = debounce(() => get().loadLogs(), 75);
+
     // Listen for new log entries (debounced by backend). To avoid missing
     // entries during coalescing, refresh from backend instead of appending payload.
-    unlistenLogEntry = await listen("log-entry", async () => {
-      await get().loadLogs();
+    // Additional debouncing at store level prevents UI lag under heavy load.
+    unlistenLogEntry = await listen("log-entry", () => {
+      debouncedLoadLogs();
     });
 
     // Listen for log cleared event
