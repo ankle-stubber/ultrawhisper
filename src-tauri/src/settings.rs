@@ -686,4 +686,19 @@ mod tests {
         assert_eq!(default_writer_flush_interval_secs(), 5);
         assert_eq!(default_audio_format(), "wav");
     }
+
+    #[test]
+    fn test_cleaning_settings_default_rules_present() {
+        let defaults = CleaningSettings::default();
+        // Ensure default profile and non-empty rules
+        assert_eq!(defaults.profile, "basic");
+        assert!(!defaults.rules.is_empty());
+    }
+
+    #[test]
+    fn test_disfluency_rules_contain_filler_pattern() {
+        let rules = super::default_disfluency_rules();
+        // First rule removes fillers (uh|um|er|ah)
+        assert!(rules.first().unwrap().pattern.contains("uh|um|er|ah"));
+    }
 }

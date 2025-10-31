@@ -1,5 +1,5 @@
 use crate::settings::CleaningSettings;
-use log::debug;
+use log::{debug, info};
 use regex::RegexBuilder;
 
 /// Apply text cleaning rules to a transcript
@@ -58,6 +58,14 @@ pub fn clean_text(input: &str, cfg: &CleaningSettings) -> String {
     if rules_applied > 0 {
         debug!(
             "Text cleaning: {} rules applied, {} → {} chars",
+            rules_applied,
+            input.len(),
+            output.len()
+        );
+        // Also emit a one-line info summary when cleaning made a change
+        info!(
+            "cleaning applied: profile={}, rules={}, {} → {} chars",
+            cfg.profile,
             rules_applied,
             input.len(),
             output.len()
