@@ -216,12 +216,24 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     }
 
     if !log_paths.is_empty() {
-        if let Err(e) = crate::logger::CombinedLogger::init_with_files(log_manager.clone(), log_paths) {
+        if let Err(e) = crate::logger::CombinedLogger::init_with_files(log_manager.clone(), log_paths.clone()) {
             eprintln!("Failed to initialize multi-file logger, falling back to default: {}", e);
             let _ = crate::logger::CombinedLogger::init(log_manager.clone());
         }
     } else if let Err(e) = crate::logger::CombinedLogger::init(log_manager.clone()) {
         eprintln!("Failed to initialize logger: {}", e);
+    }
+
+    // Log the resolved log sinks for visibility
+    if !log_paths.is_empty() {
+        let sinks = log_paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        log::info!("log sinks initialized: {}", sinks);
+    } else {
+        log::info!("log sinks initialized: stdout/stderr only");
     }
 
     // Apply config overrides (dev overlay) at startup

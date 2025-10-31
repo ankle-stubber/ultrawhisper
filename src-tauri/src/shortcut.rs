@@ -12,6 +12,7 @@ use crate::overlay::{show_recording_overlay, show_transcribing_overlay};
 use crate::settings::ShortcutBinding;
 use crate::settings::{self, get_settings, ClipboardHandling, OverlayPosition, PasteMethod, SoundTheme};
 use crate::tray::{change_tray_icon, TrayIconState};
+use crate::streaming::queue::create_bounded_queue;
 use crate::utils;
 use crate::workflow::{WorkflowStorage, types::TriggerConfig};
 use crate::ManagedToggleState;
@@ -674,6 +675,7 @@ fn start_workflow_recording(app: &AppHandle, workflow_id: &str) {
 
     let settings = get_settings(app);
     let is_always_on = settings.always_on_microphone;
+    let streaming_enabled = settings.streaming.enabled;
 
     change_tray_icon(app, TrayIconState::Recording);
     show_recording_overlay(app);
@@ -684,26 +686,69 @@ fn start_workflow_recording(app: &AppHandle, workflow_id: &str) {
         serde_json::json!({ "workflow_id": workflow_id }),
     );
 
-    // Emit workflow recording started event
-    let _ = app.emit("workflow-recording-started", serde_json::json!({ "workflow_id": workflow_id }));
-
     let rm = app.state::<Arc<AudioRecordingManager>>();
 
-    // For MVP, use batch (non-streaming) mode
-    if is_always_on {
-        play_feedback_sound(app, SoundType::Start);
-        let recording_started = rm.try_start_recording(workflow_id);
-        debug!("Recording started: {}", recording_started);
-    } else {
-        if rm.try_start_recording(workflow_id) {
-            // Small delay to ensure microphone stream is active
+    if streaming_enabled {
+        // Streaming mode: create queue, start streaming recording, and spawn engine task
+        let (chunk_tx, chunk_rx) = create_bounded_queue(settings.streaming.max_queue_size);
+        if let Err(e) = rm.start_streaming_recording(
+            workflow_id,
+            settings.streaming.chunk_duration_seconds * 1000,
+            settings.streaming.overlap_seconds * 1000,
+            chunk_tx,
+            settings.streaming.backpressure_policy,
+        ) {
+            error!("Failed to start streaming recording: {}", e);
+            return;
+        }
+
+        let workflow_engine = Arc::clone(&app.state::<Arc<crate::workflow::WorkflowEngine>>());
+        let app_clone = app.clone();
+        let wf_id = workflow_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            match workflow_engine
+                .execute_workflow_streaming_by_id(&app_clone, &wf_id, chunk_rx)
+                .await
+            {
+                Ok(_) => {
+                    utils::hide_recording_overlay(&app_clone);
+                    change_tray_icon(&app_clone, TrayIconState::Idle);
+                }
+                Err(e) => {
+                    error!("Streaming workflow failed: {}", e);
+                    utils::hide_recording_overlay(&app_clone);
+                    change_tray_icon(&app_clone, TrayIconState::Idle);
+                }
+            }
+        });
+
+        // Play audio feedback
+        if is_always_on {
+            play_feedback_sound(app, SoundType::Start);
+        } else {
             let app_clone = app.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 play_feedback_sound(&app_clone, SoundType::Start);
             });
+        }
+    } else {
+        // Batch (non-streaming) mode
+        if is_always_on {
+            play_feedback_sound(app, SoundType::Start);
+            let recording_started = rm.try_start_recording(workflow_id);
+            debug!("Recording started: {}", recording_started);
         } else {
-            debug!("Failed to start recording");
+            if rm.try_start_recording(workflow_id) {
+                // Small delay to ensure microphone stream is active
+                let app_clone = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    play_feedback_sound(&app_clone, SoundType::Start);
+                });
+            } else {
+                debug!("Failed to start recording");
+            }
         }
     }
 }
@@ -726,38 +771,43 @@ fn stop_and_execute_workflow(app: &AppHandle, workflow_id: &str) {
         serde_json::json!({ "workflow_id": &workflow_id }),
     );
 
-    // Emit workflow recording stopped event (before async work for immediate UI update)
-    let _ = app.emit("workflow-recording-stopped", serde_json::json!({ "workflow_id": &workflow_id }));
-
-    // Stop recording and get samples
-    tauri::async_runtime::spawn(async move {
-        match rm.stop_recording(&workflow_id) {
-            Some(samples) => {
-                debug!("Got {} samples from recording", samples.len());
-
-                // Execute workflow via WorkflowEngine
-                let workflow_engine = ah.state::<Arc<crate::workflow::WorkflowEngine>>();
-                match workflow_engine
-                    .execute_workflow_by_id(&ah, &workflow_id, samples)
-                    .await
-                {
-                    Ok(result) => {
-                        info!("Workflow execution complete: {} characters", result.text.len());
-                    }
-                    Err(e) => {
-                        error!("Workflow execution failed: {}", e);
+    // Streaming or Batch stop
+    let settings = get_settings(app);
+    if settings.streaming.enabled {
+        // Stop streaming recording; streaming task will finalize and clean up UI
+        if let Err(e) = rm.stop_streaming_recording(&workflow_id) {
+            error!("Failed to stop streaming recording: {}", e);
+            utils::hide_recording_overlay(&ah);
+            change_tray_icon(&ah, TrayIconState::Idle);
+        }
+    } else {
+        // Stop recording and get samples (batch)
+        tauri::async_runtime::spawn(async move {
+            match rm.stop_recording(&workflow_id) {
+                Some(samples) => {
+                    debug!("Got {} samples from recording", samples.len());
+                    let workflow_engine = ah.state::<Arc<crate::workflow::WorkflowEngine>>();
+                    match workflow_engine
+                        .execute_workflow_by_id(&ah, &workflow_id, samples)
+                        .await
+                    {
+                        Ok(result) => {
+                            info!("Workflow execution complete: {} characters", result.text.len());
+                        }
+                        Err(e) => {
+                            error!("Workflow execution failed: {}", e);
+                        }
                     }
                 }
+                None => {
+                    error!("Failed to stop recording: no samples returned");
+                }
             }
-            None => {
-                error!("Failed to stop recording: no samples returned");
-            }
-        }
-
-        // Cleanup UI
-        utils::hide_recording_overlay(&ah);
-        change_tray_icon(&ah, TrayIconState::Idle);
-    });
+            // Cleanup UI
+            utils::hide_recording_overlay(&ah);
+            change_tray_icon(&ah, TrayIconState::Idle);
+        });
+    }
 }
 
 /// Toggle workflow recording (for non-push-to-talk mode)

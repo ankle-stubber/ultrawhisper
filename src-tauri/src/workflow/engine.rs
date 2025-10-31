@@ -511,6 +511,156 @@ impl WorkflowEngine {
         })
     }
 
+    /// Execute a workflow by its ID with streaming audio chunks
+    ///
+    /// Mirrors `execute_binding_streaming` but looks up the workflow by ID from storage.
+    pub async fn execute_workflow_streaming_by_id(
+        &self,
+        app: &AppHandle,
+        workflow_id: &str,
+        mut chunk_receiver: tokio::sync::mpsc::Receiver<AudioChunk>,
+    ) -> Result<ExecutionResult> {
+        info!("Executing streaming workflow by ID: {}", workflow_id);
+
+        // Load StoredWorkflow from storage and convert to full Workflow
+        let workflow_storage = app.state::<WorkflowStorage>();
+        let stored_workflow = workflow_storage
+            .get(workflow_id)?
+            .ok_or_else(|| anyhow!("Workflow '{}' not found", workflow_id))?;
+        let workflow = stored_workflow.to_full_workflow();
+        debug!("Streaming workflow loaded: {}", workflow.name);
+
+        // Initialize streaming session
+        let mut session = StreamingSession::new();
+        debug!("Streaming session initialized: {}", session.session_id());
+
+        // Process chunks
+        let mut chunks_processed = 0;
+        while let Some(chunk) = chunk_receiver.recv().await {
+            debug!(
+                "Processing chunk {} ({} samples, final: {})",
+                chunks_processed + 1,
+                chunk.audio.len(),
+                chunk.is_final
+            );
+
+            // Ensure model is loaded
+            let model_handle = match self
+                .model_pool
+                .get_or_load(&workflow.model_config.model_id)
+                .await
+            {
+                Ok(handle) => handle,
+                Err(e) => {
+                    error!("Failed to load model for chunk {}: {}", chunks_processed + 1, e);
+                    continue;
+                }
+            };
+
+            match model_handle.transcribe(chunk.audio.clone()).await {
+                Ok(chunk_text) => {
+                    let total_chunk_secs = chunk.audio.len() as f32 / 16000.0;
+                    let overlap_secs = chunk.overlap_samples as f32 / 16000.0;
+                    let audio_duration_secs = if chunks_processed == 0 {
+                        total_chunk_secs
+                    } else {
+                        (total_chunk_secs - overlap_secs).max(0.0)
+                    };
+                    let _ = session.merge_chunk(&chunk_text, audio_duration_secs);
+                    chunks_processed += 1;
+                }
+                Err(e) => {
+                    error!("Failed to transcribe chunk {}: {}", chunks_processed + 1, e);
+                    warn!("Continuing with remaining chunks despite transcription error");
+                }
+            }
+        }
+
+        debug!("All chunks processed ({} total), finalizing session", chunks_processed);
+        let audio_duration_secs = session.total_audio_duration();
+        let mut final_transcript = session.finalize();
+        info!(
+            "Streaming transcription complete: {} characters, {} chunks",
+            final_transcript.len(),
+            chunks_processed
+        );
+
+        // Cleaning and optional backfill
+        let settings = crate::settings::get_settings(app);
+        let enable_backfill = settings.streaming.enable_backfill;
+
+        // Try whole-file backfill if available
+        let audio_manager = app.state::<Arc<crate::managers::audio::AudioRecordingManager>>();
+        let saved_file_name = audio_manager.get_last_streaming_file_name();
+        let mut backfill_status = if enable_backfill { "none" } else { "disabled" };
+        if enable_backfill {
+            if let Some(file_name) = &saved_file_name {
+                let tm_state = app.state::<Arc<crate::managers::transcription::TranscriptionManager>>();
+                match crate::streaming::backfill::backfill_whole_file(app, file_name, tm_state.inner().clone()).await {
+                    Ok(backfilled_text) => {
+                        info!(
+                            "Backfill successful: {} characters (was {} from live chunks)",
+                            backfilled_text.len(),
+                            final_transcript.len()
+                        );
+                        final_transcript = backfilled_text;
+                        backfill_status = "whole-file";
+                    }
+                    Err(e) => {
+                        warn!("Backfill failed for {}: {}. Using live transcript.", file_name, e);
+                        backfill_status = "failed";
+                    }
+                }
+            } else {
+                debug!("No saved audio file available for backfill, using live transcript");
+                backfill_status = "none";
+            }
+        }
+
+        // Apply cleaning after backfill
+        final_transcript = crate::text_cleaning::clean_text(&final_transcript, &settings.cleaning);
+
+        // Save + route
+        if final_transcript.trim().is_empty() {
+            debug!("Empty transcription; skipping history save and destination routing");
+        } else {
+            let hm = app.state::<Arc<HistoryManager>>();
+            if let Some(file_name) = &saved_file_name {
+                hm.save_transcription_with_path(file_name.clone(), final_transcript.clone(), Some(&workflow.id), Some(&workflow.name))
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to save to history with path: {}", e);
+                        anyhow!("History save failed: {}", e)
+                    })?;
+            } else {
+                hm.save_transcription(vec![], final_transcript.clone(), Some(&workflow.id), Some(&workflow.name))
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to save to history: {}", e);
+                        anyhow!("History save failed: {}", e)
+                    })?;
+            }
+
+            let router = self.build_router(app, &workflow)?;
+            let ctx = DestinationContext { app, output_base: workflow.audio_processing.save_path.clone(), audio_path: None };
+            let metadata = self.build_metadata(&workflow);
+            let _ = router.route(&ctx, &final_transcript, &metadata).await?;
+        }
+
+        let writer_ok = saved_file_name.is_some();
+        info!(
+            "session={} chunks={} blocked=0 writer_secs={:.1} writer_ok={} backfill={}",
+            workflow.id,
+            chunks_processed,
+            audio_duration_secs,
+            writer_ok,
+            backfill_status
+        );
+
+        info!("Streaming workflow execution complete for: {}", workflow.id);
+        Ok(ExecutionResult { workflow_id: workflow.id, text: final_transcript })
+    }
+
     /// Execute a workflow by its ID (for workflow-based shortcuts)
     ///
     /// This method loads a workflow from storage, converts it to a full Workflow,
@@ -550,6 +700,19 @@ impl WorkflowEngine {
 
         // 4. Transcribe audio
         debug!("Transcribing {} audio samples", samples.len());
+        // Log an approximate duration and warn if very large
+        let approx_secs = samples.len() as f32 / 16000.0;
+        info!(
+            "batch inference: {} samples (~{:.1} min)",
+            samples.len(),
+            approx_secs / 60.0
+        );
+        if approx_secs > 600.0 {
+            warn!(
+                "batch duration {:.1} min exceeds recommended threshold; enable streaming to avoid large single-pass inference",
+                approx_secs / 60.0
+            );
+        }
         let text = model_handle
             .transcribe(samples.clone())
             .await
