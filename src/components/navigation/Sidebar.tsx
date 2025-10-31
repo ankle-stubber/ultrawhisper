@@ -14,7 +14,7 @@ import { StoredWorkflow } from "../../lib/types";
 
 interface SidebarProps {
   currentPage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: any) => void;
 }
 
 interface NavItem {
@@ -152,7 +152,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
               <Icon className="w-5 h-5" />
 
               {/* Badge */}
-              {item.showBadge && item.badgeCount > 0 && (
+              {item.showBadge && item.badgeCount !== undefined && item.badgeCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-green-500 text-gray-950 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                   {item.badgeCount}
                 </span>

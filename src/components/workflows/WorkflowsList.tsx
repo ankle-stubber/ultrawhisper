@@ -1,4 +1,5 @@
 import React from "react";
+import { Zap, ZapOff, Keyboard } from "lucide-react";
 import { useWorkflows } from "../../hooks/useWorkflows";
 import { StoredWorkflow } from "../../lib/types";
 
@@ -62,26 +63,57 @@ export const WorkflowsList: React.FC<WorkflowsListProps> = ({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
-        {workflows.map((workflow) => (
-          <div
-            key={workflow.id}
-            className={`p-3 rounded-lg cursor-pointer transition-colors mb-1 ${
-              selectedId === workflow.id
-                ? "bg-logo-primary/80"
-                : "hover:bg-mid-gray/20"
-            }`}
-            onClick={() => onSelect(workflow.id)}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{workflow.name}</p>
-              {!workflow.enabled && (
-                <span className="text-xs text-mid-gray/60 bg-mid-gray/20 px-2 py-1 rounded">
-                  Disabled
-                </span>
-              )}
+        {workflows.map((workflow) => {
+          const isActive = selectedId === workflow.id;
+          const isEnabled = workflow.enabled;
+
+          return (
+            <div
+              key={workflow.id}
+              className={`
+                p-3 rounded-lg cursor-pointer transition-all duration-150 mb-2
+                border border-transparent
+                ${isActive
+                  ? isEnabled
+                    ? "bg-green-500/10 border-green-500/30 text-green-50"
+                    : "bg-gray-800 border-gray-700 text-gray-300"
+                  : isEnabled
+                    ? "hover:bg-gray-900/50 hover:border-gray-700 text-gray-200"
+                    : "hover:bg-gray-900/30 text-gray-500"
+                }
+              `}
+              onClick={() => onSelect(workflow.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  {isEnabled ? (
+                    <Zap className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <ZapOff className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                  )}
+                  <p className={`text-sm font-medium truncate ${!isEnabled ? "opacity-60" : ""}`}>
+                    {workflow.name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {workflow.trigger?.type === "Hotkey" && (
+                    <div className="flex items-center gap-1">
+                      <Keyboard className="w-3 h-3 text-gray-500" />
+                      <span className="text-xs font-mono text-gray-400">
+                        {workflow.trigger.binding}
+                      </span>
+                    </div>
+                  )}
+                  {!isEnabled && (
+                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
+                      Off
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

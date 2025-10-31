@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Toaster } from "sonner";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Sidebar } from "./navigation/Sidebar";
 import { SystemMonitorPage } from "./pages/SystemMonitorPage";
 import { WorkflowsPage } from "./pages/WorkflowsPage";
@@ -36,19 +37,21 @@ export function NewShellApp() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-950">
-      <Toaster position="bottom-right" />
+    <ErrorBoundary>
+      <div className="flex h-screen bg-gray-950">
+        <Toaster position="bottom-right" />
 
-      {/* Sidebar Navigation */}
-      <Sidebar
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-      />
+        {/* Sidebar Navigation */}
+        <Sidebar
+          currentPage={currentPage}
+          onNavigate={setCurrentPage}
+        />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden">
-        {renderPage()}
-      </main>
-    </div>
+        {/* Main Content Area */}
+        <main className="flex-1 flex overflow-hidden">
+          {renderPage()}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }
