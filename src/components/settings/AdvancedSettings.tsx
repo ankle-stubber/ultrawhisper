@@ -3,6 +3,7 @@ import { ShowOverlay } from "./ShowOverlay";
 import { TranslateToEnglish } from "./TranslateToEnglish";
 import { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";
 import { CustomWords } from "./CustomWords";
+import { TranscriptionCleaning } from "./TranscriptionCleaning";
 import { ConfigCard } from "../shared/ConfigCard";
 import { StartHidden } from "./StartHidden";
 import { AutostartToggle } from "./AutostartToggle";
@@ -21,6 +22,7 @@ export const AdvancedSettings: React.FC = () => {
         <TranslateToEnglish descriptionMode="tooltip" grouped={true} />
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
+        <TranscriptionCleaning descriptionMode="tooltip" grouped />
       </ConfigCard>
 
       {/* Workflow Engine Settings */}

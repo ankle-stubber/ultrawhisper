@@ -11,6 +11,7 @@ mod managers;
 mod overlay;
 mod settings;
 mod shortcut;
+mod text_cleaning;
 mod templates;
 mod tray;
 mod utils;
@@ -494,6 +495,7 @@ pub fn run() {
             commands::settings::change_use_workflow_engine_setting,
             commands::settings::reload_config_overrides,
             commands::settings::change_streaming_settings,
+            settings::change_cleaning_settings,
             commands::telegram::store_telegram_credentials,
             commands::telegram::get_telegram_credentials,
             commands::telegram::delete_telegram_credentials,

@@ -200,6 +200,10 @@ impl WorkflowEngine {
             .await
             .map_err(|e| anyhow!("Transcription failed: {}", e))?;
 
+        // Apply text cleaning to batch transcript
+        let settings = get_settings(app);
+        let text = crate::text_cleaning::clean_text(&text, &settings.cleaning);
+
         info!("Transcription complete: {} characters", text.len());
 
         // 4. Match legacy parity: if transcription is empty, do not save history or route outputs
@@ -418,6 +422,10 @@ impl WorkflowEngine {
             }
         }
 
+        // Apply text cleaning to final merged transcript (after backfill)
+        let settings = crate::settings::get_settings(app);
+        final_transcript = crate::text_cleaning::clean_text(&final_transcript, &settings.cleaning);
+
         // 7. Phase 1 parity: if transcription is empty, skip history and destinations
         if final_transcript.trim().is_empty() {
             debug!("Empty transcription; skipping history save and destination routing");
@@ -546,6 +554,10 @@ impl WorkflowEngine {
             .transcribe(samples.clone())
             .await
             .map_err(|e| anyhow!("Transcription failed: {}", e))?;
+
+        // Apply text cleaning to workflow-by-id transcript
+        let settings = get_settings(app);
+        let text = crate::text_cleaning::clean_text(&text, &settings.cleaning);
 
         info!("Transcription complete: {} characters", text.len());
 

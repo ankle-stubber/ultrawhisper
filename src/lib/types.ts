@@ -82,6 +82,20 @@ export const StreamingSettingsSchema = z.object({
 });
 export type StreamingSettings = z.infer<typeof StreamingSettingsSchema>;
 
+export const CleaningRuleSchema = z.object({
+  pattern: z.string(),
+  replace: z.string(),
+  flags: z.string().optional(),
+});
+export type CleaningRule = z.infer<typeof CleaningRuleSchema>;
+
+export const CleaningSettingsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  profile: z.string().optional().default("basic"),
+  rules: z.array(CleaningRuleSchema).optional().default([]),
+});
+export type CleaningSettings = z.infer<typeof CleaningSettingsSchema>;
+
 export const SettingsSchema = z.object({
   bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
@@ -130,6 +144,11 @@ export const SettingsSchema = z.object({
     enable_backfill: true,
     writer_flush_interval_secs: 5,
     audio_format: "wav",
+  }),
+  cleaning: CleaningSettingsSchema.optional().default({
+    enabled: false,
+    profile: "basic",
+    rules: [],
   }),
 });
 
