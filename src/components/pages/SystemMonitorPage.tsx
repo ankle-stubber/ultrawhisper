@@ -7,6 +7,7 @@ import { LogsDetail } from "../logs/LogsDetail";
 import { PageHeader } from "../shared";
 import { useSettings } from "../../hooks/useSettings";
 import { useWorkflows } from "../../hooks/useWorkflows";
+import { useActivityStore } from "../../stores/activityStore";
 
 type StatusType = "idle" | "active" | "recording" | "error" | "loading";
 
@@ -83,7 +84,7 @@ export function SystemMonitorPage() {
   const [modelStatus, setModelStatus] = useState<string>("Ready");
   const [modelName, setModelName] = useState<string>("");
   const [cachedModelName, setCachedModelName] = useState<string>("");
-  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+  const activeWorkflowId = useActivityStore((s) => s.activeWorkflowId);
   const { settings } = useSettings();
   const { workflows } = useWorkflows();
 
@@ -171,18 +172,7 @@ export function SystemMonitorPage() {
       );
       cleanups.push(unlistenModelState);
 
-      // Workflow recording events
-      const unlistenWorkflowStarted = await listen<{ workflow_id: string }>(
-        "workflow-recording-started",
-        (event) => setActiveWorkflowId(event.payload.workflow_id)
-      );
-      cleanups.push(unlistenWorkflowStarted);
-
-      const unlistenWorkflowStopped = await listen<{ workflow_id: string }>(
-        "workflow-recording-stopped",
-        () => setActiveWorkflowId(null)
-      );
-      cleanups.push(unlistenWorkflowStopped);
+      // (Active workflow listeners moved to app scope in NewShellApp)
     })();
 
     return () => {
