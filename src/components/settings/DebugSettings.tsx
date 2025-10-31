@@ -1,7 +1,7 @@
 import React from "react";
 import { WordCorrectionThreshold } from "./debug/WordCorrectionThreshold";
 import { AppDataDirectory } from "./AppDataDirectory";
-import { SettingsGroup } from "../ui/SettingsGroup";
+import { ConfigCard } from "../shared/ConfigCard";
 import { HistoryLimit } from "./HistoryLimit";
 import { PasteMethodSetting } from "./PasteMethod";
 import { ClipboardHandlingSetting } from "./ClipboardHandling";
@@ -10,8 +10,8 @@ import { SoundPicker } from "./SoundPicker";
 
 export const DebugSettings: React.FC = () => {
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-6">
-      <SettingsGroup title="Debug">
+    <div className="space-y-6">
+      <ConfigCard title="Debug">
         <PasteMethodSetting descriptionMode="tooltip" grouped={true} />
         <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} />
         <SoundPicker
@@ -22,7 +22,7 @@ export const DebugSettings: React.FC = () => {
         <AppDataDirectory descriptionMode="tooltip" grouped={true} />
         <HistoryLimit descriptionMode="tooltip" grouped={true} />
         <AlwaysOnMicrophone descriptionMode="tooltip" grouped={true} />
-      </SettingsGroup>
+      </ConfigCard>
     </div>
   );
 };

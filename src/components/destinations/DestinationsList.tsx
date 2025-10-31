@@ -205,42 +205,22 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b uw-border-default flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold uw-text-primary">Destinations</h2>
-          <p className="text-xs uw-text-secondary mt-1">
-            Configure where transcriptions are sent
-          </p>
-        </div>
-        {sorted.length > 0 && (
-          <div className="relative" ref={createMenuRef}>
-            <PrimaryButton
-              onClick={() => setShowCreateMenu(!showCreateMenu)}
-              disabled={isCreating}
-              size="sm"
-              title="Create new destination"
-            >
-              + New Destination
-            </PrimaryButton>
-
-            {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
+      {loading ? (
+        <>
+          <div className="p-4 border-b uw-border-default">
+            <h2 className="text-lg font-semibold uw-text-primary">Destinations</h2>
           </div>
-        )}
-      </div>
-      <div className="flex-1 overflow-y-auto uw-scroll p-2">
-        {loading && (
-          <div className="text-xs uw-text-secondary p-2">Loading…</div>
-        )}
-        {!loading && sorted.length === 0 && (
-          <div className="flex flex-col items-center justify-center p-8 text-center gap-4">
-            <div>
-              <p className="text-sm font-medium uw-text-primary mb-1">
-                No destinations yet
-              </p>
-              <p className="text-xs uw-text-secondary">
-                Create your first destination to route transcriptions
-              </p>
-            </div>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="uw-text-secondary">Loading destinations...</p>
+          </div>
+        </>
+      ) : sorted.length === 0 ? (
+        <>
+          <div className="p-4 border-b uw-border-default">
+            <h2 className="text-lg font-semibold uw-text-primary">Destinations</h2>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
+            <p className="uw-text-secondary text-center">No destinations yet</p>
             <div className="relative" ref={createMenuRef}>
               <PrimaryButton
                 onClick={() => setShowCreateMenu(!showCreateMenu)}
@@ -248,11 +228,26 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
               >
                 {isCreating ? "Creating..." : "+ New Destination"}
               </PrimaryButton>
-
               {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
             </div>
           </div>
-        )}
+        </>
+      ) : (
+        <>
+          <div className="p-4 border-b uw-border-default">
+            <h2 className="text-lg font-semibold uw-text-primary">Destinations</h2>
+            <div className="relative mt-3" ref={createMenuRef}>
+              <PrimaryButton
+                onClick={() => setShowCreateMenu(!showCreateMenu)}
+                disabled={isCreating}
+                fullWidth
+              >
+                + New Destination
+              </PrimaryButton>
+              {showCreateMenu && <CreateMenu onSelect={handleCreateDestination} />}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto uw-scroll p-2">
         {!loading &&
           sorted.map((dest) => {
             const isActive = selectedId === dest.id;
@@ -295,7 +290,9 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
               </div>
             );
           })}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

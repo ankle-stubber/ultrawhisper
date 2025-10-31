@@ -97,7 +97,7 @@ export const HistorySettings: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-3xl w-full mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <SettingsGroup title="History">
           <div className="px-4 py-3 text-center text-text/60">
             Loading history...
@@ -109,7 +109,7 @@ export const HistorySettings: React.FC = () => {
 
   if (historyEntries.length === 0) {
     return (
-      <div className="max-w-3xl w-full mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <SettingsGroup title="History">
           <div className="px-4 py-3 text-center text-text/60">
             No transcriptions yet. Start recording to build your history!
@@ -120,7 +120,7 @@ export const HistorySettings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <SettingsGroup title="History">
         {historyEntries.map((entry) => (
           <HistoryEntryComponent

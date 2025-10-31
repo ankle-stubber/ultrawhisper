@@ -72,7 +72,7 @@ export default function ActiveWindowSetup({ config, onSave }: ActiveWindowSetupP
   };
 
   return (
-    <div className="w-full max-w-2xl space-y-4">
+    <div className="w-full space-y-4">
       <SettingsGroup title="ACTIVE WINDOW CONFIGURATION" description="Configure how text is pasted to the active application">
         <SettingContainer
           title="Paste Method"

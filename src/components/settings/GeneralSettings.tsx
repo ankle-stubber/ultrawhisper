@@ -2,7 +2,7 @@ import React from "react";
 import { MicrophoneSelector } from "./MicrophoneSelector";
 import { LanguageSelector } from "./LanguageSelector";
 import { HandyShortcut } from "./HandyShortcut";
-import { SettingsGroup } from "../ui/SettingsGroup";
+import { ConfigCard } from "../shared/ConfigCard";
 import { OutputDeviceSelector } from "./OutputDeviceSelector";
 import { PushToTalk } from "./PushToTalk";
 import { AudioFeedback } from "./AudioFeedback";
@@ -12,13 +12,13 @@ import { VolumeSlider } from "./VolumeSlider";
 export const GeneralSettings: React.FC = () => {
   const { audioFeedbackEnabled } = useSettings();
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-6">
-      <SettingsGroup title="General">
+    <div className="space-y-6">
+      <ConfigCard title="General">
         <HandyShortcut descriptionMode="tooltip" grouped={true} />
         <LanguageSelector descriptionMode="tooltip" grouped={true} />
         <PushToTalk descriptionMode="tooltip" grouped={true} />
-      </SettingsGroup>
-      <SettingsGroup title="Sound">
+      </ConfigCard>
+      <ConfigCard title="Sound">
         <MicrophoneSelector descriptionMode="tooltip" grouped={true} />
         <AudioFeedback descriptionMode="tooltip" grouped={true} />
         <OutputDeviceSelector
@@ -27,7 +27,7 @@ export const GeneralSettings: React.FC = () => {
           disabled={!audioFeedbackEnabled}
         />
         <VolumeSlider disabled={!audioFeedbackEnabled} />
-      </SettingsGroup>
+      </ConfigCard>
     </div>
   );
 };
