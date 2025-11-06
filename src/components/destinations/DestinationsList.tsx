@@ -6,7 +6,7 @@ import { PrimaryButton } from "../shared";
 
 interface DestinationsListProps {
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, creationType?: string) => void;
 }
 
 type DestinationConfig =
@@ -42,6 +42,7 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
   const [items, setItems] = useState<DestinationEntity[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [ephemeralItem, setEphemeralItem] = useState<DestinationEntity | null>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
 
@@ -65,6 +66,8 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
   // Listen for destination changes from other views
   useEffect(() => {
     const handleDestinationsChanged = () => {
+      // Clear ephemeral item when destinations are refreshed (after creation)
+      setEphemeralItem(null);
       load();
     };
 
@@ -72,15 +75,24 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
     return () => window.removeEventListener("destinations-changed", handleDestinationsChanged);
   }, [load]);
 
-  // Sorted view used for rendering and auto-select logic
+  // Sorted view used for rendering and auto-select logic, includes ephemeral item
   const sorted = useMemo(() => {
+    // Combine real items with ephemeral item
+    const allItems = ephemeralItem
+      ? [...items, ephemeralItem]
+      : items;
+
     // Sort by type then name for a stable list
-    return [...items].sort((a, b) => {
+    return [...allItems].sort((a, b) => {
+      // Ephemeral items come first
+      if (a === ephemeralItem) return -1;
+      if (b === ephemeralItem) return 1;
+
       const at = typeLabel(a.config);
       const bt = typeLabel(b.config);
       return at === bt ? a.name.localeCompare(b.name) : at.localeCompare(bt);
     });
-  }, [items]);
+  }, [items, ephemeralItem]);
 
   // Auto-select first item if nothing is selected or selected item doesn't exist
   useEffect(() => {
@@ -92,58 +104,34 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
     }
   }, [loading, sorted, selectedId, onSelect]);
 
-  const handleCreateDestination = useCallback(async (type: "telegram" | "file_system" | "active_window") => {
-    setIsCreating(true);
+  const handleCreateDestination = useCallback((type: "telegram" | "file_system" | "active_window") => {
     setShowCreateMenu(false);
 
-    try {
-      const id = crypto.randomUUID();
+    // Generate ID locally
+    const id = crypto.randomUUID();
 
-      const nameDefaults = {
-        active_window: "Active Window",
-        file_system: "File Output",
-        telegram: "Telegram",
-      };
+    const nameDefaults = {
+      active_window: "Active Window",
+      file_system: "File System",
+      telegram: "Telegram",
+    };
 
-      const configDefaults = {
-        active_window: {
-          type: "active_window" as const,
-          paste_method: "ctrl_v" as const,
-          preserve_clipboard: false,
-        },
-        file_system: {
-          type: "file_system" as const,
-          path: "",
-          extension: "md",
-          filename_pattern: "transcription_{timestamp}.md",
-        },
-        telegram: {
-          type: "telegram" as const,
-          credential_id: `telegram_${id.slice(0, 8)}`,
-          chat_id: "",
-          include_audio: false,
-        },
-      };
+    // Create ephemeral item to show in list (unsaved indicator)
+    const ephemeral: DestinationEntity = {
+      id,
+      name: `New ${nameDefaults[type]} (unsaved)`,
+      config: {
+        type: type as any,
+        // Minimal config just for display
+      } as DestinationConfig,
+    };
 
-      const newDest: DestinationEntity = {
-        id,
-        name: nameDefaults[type],
-        config: configDefaults[type],
-      };
+    setEphemeralItem(ephemeral);
 
-      await invoke("create_destination", { destination: newDest });
-      toast.success(`${nameDefaults[type]} destination created`);
-      await load();
-      onSelect(id);
-      // Notify other views (e.g., WorkflowEditor) to refresh destinations
-      window.dispatchEvent(new CustomEvent("destinations-changed"));
-    } catch (e: any) {
-      const msg = typeof e === "string" ? e : e?.toString?.() || "Unknown error";
-      toast.error(`Failed to create destination: ${msg}`);
-    } finally {
-      setIsCreating(false);
-    }
-  }, [load, onSelect]);
+    // Navigate to detail panel with creation intent
+    // The creationType parameter tells DestinationDetail to enter creation mode
+    onSelect(id, type);
+  }, [onSelect]);
 
   // Click outside and Escape handlers for create menu
   useEffect(() => {
@@ -251,6 +239,7 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
         {!loading &&
           sorted.map((dest) => {
             const isActive = selectedId === dest.id;
+            const isEphemeral = dest === ephemeralItem;
             const type = dest.config.type;
 
             // Type icons and colors
@@ -273,13 +262,19 @@ export const DestinationsList: React.FC<DestinationsListProps> = ({
                     ? "uw-bg-primary-dim uw-border-primary uw-text-accent"
                     : "hover:uw-bg-card hover:border-gray-700 uw-text-primary border-transparent"
                   }
+                  ${isEphemeral ? "opacity-70 border-dashed" : ""}
                 `}
                 onClick={() => onSelect(dest.id)}
               >
                 <div className="flex items-center gap-3">
                   <Icon className={`w-4 h-4 ${isActive ? "uw-text-accent" : config.color} flex-shrink-0`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{dest.name}</p>
+                    <p className="text-sm font-medium truncate">
+                      {dest.name}
+                      {isEphemeral && (
+                        <span className="ml-2 text-xs text-yellow-500">(unsaved)</span>
+                      )}
+                    </p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${config.bgColor} ${config.borderColor} border`}>
                         {typeLabel(dest.config)}

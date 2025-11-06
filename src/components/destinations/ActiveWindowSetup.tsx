@@ -12,10 +12,17 @@ interface ActiveWindowConfig {
 
 interface ActiveWindowSetupProps {
   config: ActiveWindowConfig;
-  onSave: (config: ActiveWindowConfig) => Promise<void>;
+  onChange?: (field: string, value: any) => void;  // Creation mode
+  onSave?: (config: ActiveWindowConfig) => Promise<void>;  // Edit mode
+  errors?: Record<string, string>;
 }
 
-export default function ActiveWindowSetup({ config, onSave }: ActiveWindowSetupProps) {
+export default function ActiveWindowSetup({
+  config,
+  onChange,
+  onSave,
+  errors = {},
+}: ActiveWindowSetupProps) {
   // Form state
   const [pasteMethod, setPasteMethod] = useState<"ctrl_v" | "direct">(config.paste_method);
   const [preserveClipboard, setPreserveClipboard] = useState(config.preserve_clipboard);
@@ -44,8 +51,25 @@ export default function ActiveWindowSetup({ config, onSave }: ActiveWindowSetupP
     pasteMethod !== originalConfig.paste_method ||
     preserveClipboard !== originalConfig.preserve_clipboard;
 
+  // Handle field changes
+  const handleFieldChange = (field: string, value: any) => {
+    // Update local state
+    if (field === "paste_method") {
+      setPasteMethod(value);
+    } else if (field === "preserve_clipboard") {
+      setPreserveClipboard(value);
+    }
+
+    // Notify parent (for creation mode)
+    if (onChange) {
+      onChange(field, value);
+    }
+  };
+
   // Handlers
   const handleSave = async () => {
+    if (!onSave) return;
+
     setIsSaving(true);
     try {
       await onSave({
@@ -83,13 +107,20 @@ export default function ActiveWindowSetup({ config, onSave }: ActiveWindowSetupP
         >
           <select
             value={pasteMethod}
-            onChange={(e) => setPasteMethod(e.target.value as "ctrl_v" | "direct")}
+            onChange={(e) => handleFieldChange("paste_method", e.target.value as "ctrl_v" | "direct")}
             disabled={isSaving}
-            className="w-full px-3 py-2 bg-white dark:bg-dark-bg border border-mid-gray/30 rounded-md text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-logo-primary transition-all"
+            className={`w-full px-3 py-2 bg-white dark:bg-dark-bg border border-mid-gray/30 rounded-md text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-logo-primary transition-all ${errors.paste_method ? 'border-red-500' : ''}`}
+            aria-invalid={!!errors.paste_method}
+            aria-describedby={errors.paste_method ? "paste-method-error" : undefined}
           >
             <option value="ctrl_v">Ctrl+V / Cmd+V (Standard)</option>
             <option value="direct">Direct Paste</option>
           </select>
+          {errors.paste_method && (
+            <p id="paste-method-error" className="text-red-500 text-sm mt-1">
+              {errors.paste_method}
+            </p>
+          )}
         </SettingContainer>
 
         <SettingContainer
@@ -102,29 +133,32 @@ export default function ActiveWindowSetup({ config, onSave }: ActiveWindowSetupP
           <div className="flex items-center">
             <BareToggle
               checked={preserveClipboard}
-              onChange={setPreserveClipboard}
+              onChange={(checked) => handleFieldChange("preserve_clipboard", checked)}
               disabled={isSaving}
             />
           </div>
         </SettingContainer>
       </SettingsGroup>
 
-      <div className="flex gap-2 justify-end">
-        <Button
-          variant="secondary"
-          onClick={handleRevert}
-          disabled={!isDirty || isSaving}
-        >
-          Revert
-        </Button>
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          disabled={!isDirty || isSaving}
-        >
-          {isSaving ? "Saving..." : "Save"}
-        </Button>
-      </div>
+      {/* Save/Revert buttons for edit mode */}
+      {onSave && isDirty && (
+        <div className="flex gap-2 justify-end">
+          <Button
+            variant="secondary"
+            onClick={handleRevert}
+            disabled={!isDirty || isSaving}
+          >
+            Revert
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={!isDirty || isSaving}
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
