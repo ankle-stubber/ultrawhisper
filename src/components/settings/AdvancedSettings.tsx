@@ -32,9 +32,16 @@ export const AdvancedSettings: React.FC = () => {
       {/* Telegram Settings (Bundle 4 MVP - will move to Destinations panel in Bundle 6) */}
       <ConfigCard title="Telegram (MVP)">
         <TelegramSetup
-          credentialId="telegram_default"
-          descriptionMode="tooltip"
-          grouped={true}
+          config={{
+            type: "telegram",
+            credential_id: "telegram_default",
+            chat_id: "",
+            include_audio: false
+          }}
+          onSave={async (config) => {
+            // This is temporary - telegram setup should be managed through destinations
+            console.log("Telegram config saved:", config);
+          }}
         />
       </ConfigCard>
 
