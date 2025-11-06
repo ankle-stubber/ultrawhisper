@@ -1,21 +1,5 @@
 import { z } from "zod";
 
-export const ShortcutBindingSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  default_binding: z.string(),
-  current_binding: z.string(),
-  paste_to_window: z.boolean().optional().default(true),
-  save_to_file: z.boolean().optional().default(false),
-  output_path: z.string().nullable().optional(),
-});
-
-export const ShortcutBindingsMapSchema = z.record(
-  z.string(),
-  ShortcutBindingSchema,
-);
-
 export const AudioDeviceSchema = z.object({
   index: z.string(),
   name: z.string(),
@@ -97,7 +81,6 @@ export const CleaningSettingsSchema = z.object({
 export type CleaningSettings = z.infer<typeof CleaningSettingsSchema>;
 
 export const SettingsSchema = z.object({
-  bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
   audio_feedback: z.boolean(),
   audio_feedback_volume: z.number().optional().default(1.0),
@@ -132,7 +115,6 @@ export const SettingsSchema = z.object({
     min_file_size_kb: 1,
     max_file_size_mb: 500,
   }),
-  use_workflow_engine: z.boolean().optional().default(false),
   streaming: StreamingSettingsSchema.optional().default({
     enabled: false,
     auto_enable_threshold_seconds: 300,
@@ -152,16 +134,7 @@ export const SettingsSchema = z.object({
   }),
 });
 
-export const BindingResponseSchema = z.object({
-  success: z.boolean(),
-  binding: ShortcutBindingSchema.nullable(),
-  error: z.string().nullable(),
-});
-
 export type AudioDevice = z.infer<typeof AudioDeviceSchema>;
-export type BindingResponse = z.infer<typeof BindingResponseSchema>;
-export type ShortcutBinding = z.infer<typeof ShortcutBindingSchema>;
-export type ShortcutBindingsMap = z.infer<typeof ShortcutBindingsMapSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 
 export const ModelInfoSchema = z.object({

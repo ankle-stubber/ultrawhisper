@@ -1,4 +1,3 @@
-mod actions;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
@@ -28,8 +27,7 @@ use managers::history::HistoryManager;
 use managers::logs::LogManager;
 use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 
@@ -38,13 +36,6 @@ use tauri::{Emitter, Listener};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
-#[derive(Default)]
-struct ShortcutToggleStates {
-    // Map: shortcut_binding_id -> is_active
-    active_toggles: HashMap<String, bool>,
-}
-
-type ManagedToggleState = Mutex<ShortcutToggleStates>;
 
 /// Clean up stale temporary files from the recordings directory.
 ///
@@ -412,7 +403,6 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec![]),
         ))
-        .manage(Mutex::new(ShortcutToggleStates::default()))
         .setup(move |app| {
             let settings = settings::get_settings(&app.handle());
             let app_handle = app.handle().clone();
@@ -451,9 +441,6 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            shortcut::change_binding,
-            shortcut::reset_binding,
-            shortcut::update_binding_output_config,
             shortcut::change_ptt_setting,
             shortcut::change_audio_feedback_setting,
             shortcut::change_audio_feedback_volume_setting,
@@ -468,8 +455,6 @@ pub fn run() {
             shortcut::change_paste_method_setting,
             shortcut::change_clipboard_handling_setting,
             shortcut::update_custom_words,
-            shortcut::suspend_binding,
-            shortcut::resume_binding,
             trigger_update_check,
             commands::cancel_operation,
             commands::get_app_dir_path,
@@ -504,7 +489,6 @@ pub fn run() {
             commands::history::delete_history_entry,
             commands::history::update_history_limit,
             commands::settings::pick_directory,
-            commands::settings::change_use_workflow_engine_setting,
             commands::settings::reload_config_overrides,
             commands::settings::change_streaming_settings,
             settings::change_cleaning_settings,

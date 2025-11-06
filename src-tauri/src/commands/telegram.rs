@@ -8,7 +8,6 @@
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::AppHandle;
 
 /// Keychain service name for Telegram credentials
 const KEYCHAIN_SERVICE: &str = "com.ultrawhisper.telegram";

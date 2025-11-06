@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Major Refactor:** Removed legacy shortcuts system entirely. Workflows are now the sole hotkey mechanism.
+- Eliminated ~2,000+ lines of legacy binding code
+- Simplified architecture with unified workflow-based hotkey management
+- Improved toggle workflow support using AudioRecordingManager state
+
+### Removed
+- Legacy binding system (`ShortcutBinding`, `ACTION_MAP`, binding commands)
+- `use_workflow_engine` toggle - workflows are now always enabled
+- Old UI components for editing legacy shortcuts
+
 ## [0.3.0] - 2025-07-11
 
 ### Added

@@ -38,18 +38,6 @@ pub fn reload_config_overrides(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn change_use_workflow_engine_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = crate::settings::get_settings(&app);
-    settings.use_workflow_engine = enabled;
-    crate::settings::write_settings(&app, settings);
-
-    // Refresh workflow shortcuts when engine is toggled
-    crate::shortcut::refresh_workflow_shortcuts(&app);
-
-    Ok(())
-}
-
-#[tauri::command]
 pub fn change_streaming_settings(
     app: AppHandle,
     streaming: crate::settings::StreamingSettings,
