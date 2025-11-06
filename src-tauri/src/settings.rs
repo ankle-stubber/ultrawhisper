@@ -1,32 +1,9 @@
 use crate::streaming::queue::BackpressurePolicy;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use serde_json::Value as JsonValue;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::StoreExt;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ShortcutBinding {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub default_binding: String,
-    pub current_binding: String,
-    #[serde(default = "default_paste_to_window")]
-    pub paste_to_window: bool,
-    #[serde(default = "default_save_to_file")]
-    pub save_to_file: bool,
-    #[serde(default)]
-    pub output_path: Option<String>,
-}
-
-fn default_paste_to_window() -> bool {
-    true
-}
-
-fn default_save_to_file() -> bool {
-    false
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -390,7 +367,6 @@ fn default_audio_format() -> String {
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
-    pub bindings: HashMap<String, ShortcutBinding>,
     pub push_to_talk: bool,
     pub audio_feedback: bool,
     #[serde(default = "default_audio_feedback_volume")]
@@ -431,8 +407,6 @@ pub struct AppSettings {
     pub clipboard_handling: ClipboardHandling,
     #[serde(default)]
     pub batch_transcription: BatchTranscriptionSettings,
-    #[serde(default)]
-    pub use_workflow_engine: bool,
     #[serde(default)]
     pub streaming: StreamingSettings,
     #[serde(default)]
@@ -493,11 +467,7 @@ fn default_sound_theme() -> SoundTheme {
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
-    // Legacy settings-driven bindings have been removed in favor of Workflow hotkeys.
-    let bindings = HashMap::new();
-
     AppSettings {
-        bindings,
         push_to_talk: true,
         audio_feedback: false,
         audio_feedback_volume: default_audio_feedback_volume(),
@@ -519,7 +489,6 @@ pub fn get_default_settings() -> AppSettings {
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
         batch_transcription: BatchTranscriptionSettings::default(),
-        use_workflow_engine: false,
         streaming: StreamingSettings::default(),
         cleaning: CleaningSettings::default(),
     }
@@ -560,13 +529,6 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
-    // Migration: remove legacy bindings map; workflows now own hotkeys
-    if !settings.bindings.is_empty() {
-        settings.bindings.clear();
-        store.set("settings", serde_json::to_value(&settings).unwrap());
-        log::info!("Removed legacy settings.bindings during migration; use workflows for hotkeys");
-    }
-
     settings
 }
 
@@ -595,20 +557,6 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
         .expect("Failed to initialize store");
 
     store.set("settings", serde_json::to_value(&settings).unwrap());
-}
-
-pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
-    let settings = get_settings(app);
-
-    settings.bindings
-}
-
-pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
-    let bindings = get_bindings(app);
-
-    let binding = bindings.get(id).unwrap().clone();
-
-    binding
 }
 
 pub fn get_history_limit(app: &AppHandle) -> usize {

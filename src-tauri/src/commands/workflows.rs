@@ -1,4 +1,5 @@
 use crate::workflow::{StoredWorkflow, WorkflowStorage};
+use log::{debug, info, warn};
 use tauri::State;
 
 /// List all workflows
@@ -6,6 +7,7 @@ use tauri::State;
 pub fn list_workflows(
     storage: State<WorkflowStorage>,
 ) -> Result<Vec<StoredWorkflow>, String> {
+    debug!("tauri command list_workflows invoked");
     storage.list().map_err(|e| e.to_string())
 }
 
@@ -15,6 +17,7 @@ pub fn get_workflow(
     storage: State<WorkflowStorage>,
     id: String,
 ) -> Result<Option<StoredWorkflow>, String> {
+    debug!("tauri command get_workflow invoked for id {}", id);
     storage.get(&id).map_err(|e| e.to_string())
 }
 
@@ -24,6 +27,7 @@ pub fn upsert_workflow(
     storage: State<WorkflowStorage>,
     workflow: StoredWorkflow,
 ) -> Result<(), String> {
+    info!("tauri command upsert_workflow invoked for {}", workflow.id);
     // Check if workflow exists to determine create vs update
     match storage.get(&workflow.id) {
         Ok(Some(_)) => {
@@ -44,5 +48,6 @@ pub fn delete_workflow(
     storage: State<WorkflowStorage>,
     id: String,
 ) -> Result<(), String> {
+    warn!("tauri command delete_workflow invoked for {}", id);
     storage.delete(&id).map_err(|e| e.to_string())
 }

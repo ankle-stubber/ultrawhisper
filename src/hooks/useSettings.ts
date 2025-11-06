@@ -21,16 +21,6 @@ interface UseSettingsReturn {
   refreshAudioDevices: () => Promise<void>;
   refreshOutputDevices: () => Promise<void>;
 
-  // Binding-specific actions
-  updateBinding: (id: string, binding: string) => Promise<void>;
-  updateBindingOutputConfig: (
-    id: string,
-    pasteToWindow: boolean,
-    saveToFile: boolean,
-    outputPath: string | null
-  ) => Promise<void>;
-  resetBinding: (id: string) => Promise<void>;
-
   // Convenience getters
   getSetting: <K extends keyof Settings>(key: K) => Settings[K] | undefined;
 }
@@ -57,9 +47,6 @@ export const useSettings = (): UseSettingsReturn => {
     refreshSettings: store.refreshSettings,
     refreshAudioDevices: store.refreshAudioDevices,
     refreshOutputDevices: store.refreshOutputDevices,
-    updateBinding: store.updateBinding,
-    updateBindingOutputConfig: store.updateBindingOutputConfig,
-    resetBinding: store.resetBinding,
     getSetting: store.getSetting,
   };
 };

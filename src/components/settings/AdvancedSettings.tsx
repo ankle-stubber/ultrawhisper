@@ -8,7 +8,6 @@ import { ConfigCard } from "../shared/ConfigCard";
 import { StartHidden } from "./StartHidden";
 import { AutostartToggle } from "./AutostartToggle";
 import BatchProcessingSettings from "./BatchProcessingSettings";
-import { UseWorkflowEngine } from "./UseWorkflowEngine";
 import { StreamingSettings } from "./StreamingSettings";
 import { TelegramSetup } from "../destinations/TelegramSetup";
 
@@ -23,11 +22,6 @@ export const AdvancedSettings: React.FC = () => {
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
         <TranscriptionCleaning descriptionMode="tooltip" grouped />
-      </ConfigCard>
-
-      {/* Workflow Engine Settings */}
-      <ConfigCard title="Workflow Engine">
-        <UseWorkflowEngine descriptionMode="tooltip" grouped={true} />
       </ConfigCard>
 
       {/* Streaming Settings */}

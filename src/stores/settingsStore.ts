@@ -21,14 +21,6 @@ interface SettingsStore {
   refreshSettings: () => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
   refreshOutputDevices: () => Promise<void>;
-  updateBinding: (id: string, binding: string) => Promise<void>;
-  updateBindingOutputConfig: (
-    id: string,
-    pasteToWindow: boolean,
-    saveToFile: boolean,
-    outputPath: string | null
-  ) => Promise<void>;
-  resetBinding: (id: string) => Promise<void>;
   getSetting: <K extends keyof Settings>(key: K) => Settings[K] | undefined;
   isUpdatingKey: (key: string) => boolean;
   playTestSound: (soundType: "start" | "stop") => Promise<void>;
@@ -107,8 +99,6 @@ const settingUpdaters: {
   clipboard_handling: (value) =>
     invoke("change_clipboard_handling_setting", { handling: value }),
   history_limit: (value) => invoke("update_history_limit", { limit: value }),
-  use_workflow_engine: (value) =>
-    invoke("change_use_workflow_engine_setting", { enabled: value }),
   streaming: (value) =>
     invoke("change_streaming_settings", { streaming: value }),
   cleaning: (value) =>
@@ -276,7 +266,7 @@ export const useSettingsStore = create<SettingsStore>()(
         const updater = settingUpdaters[key];
         if (updater) {
           await updater(value);
-        } else if (key !== "bindings" && key !== "selected_model") {
+        } else if (key !== "selected_model") {
           console.warn(`No handler for setting: ${String(key)}`);
         }
       } catch (error) {
@@ -294,118 +284,6 @@ export const useSettingsStore = create<SettingsStore>()(
       const defaultValue = DEFAULT_SETTINGS[key];
       if (defaultValue !== undefined) {
         await get().updateSetting(key, defaultValue as any);
-      }
-    },
-
-    // Update a specific binding
-    updateBinding: async (id, binding) => {
-      const { settings, setUpdating } = get();
-      const updateKey = `binding_${id}`;
-      const originalBinding = settings?.bindings?.[id]?.current_binding;
-
-      setUpdating(updateKey, true);
-
-      try {
-        // Optimistic update
-        set((state) => ({
-          settings: state.settings
-            ? {
-                ...state.settings,
-                bindings: {
-                  ...state.settings.bindings,
-                  [id]: {
-                    ...state.settings.bindings[id],
-                    current_binding: binding,
-                  },
-                },
-              }
-            : null,
-        }));
-
-        await invoke("change_binding", { id, binding });
-      } catch (error) {
-        console.error(`Failed to update binding ${id}:`, error);
-
-        // Rollback on error
-        if (originalBinding && get().settings) {
-          set((state) => ({
-            settings: state.settings
-              ? {
-                  ...state.settings,
-                  bindings: {
-                    ...state.settings.bindings,
-                    [id]: {
-                      ...state.settings.bindings[id],
-                      current_binding: originalBinding,
-                    },
-                  },
-                }
-              : null,
-          }));
-        }
-      } finally {
-        setUpdating(updateKey, false);
-      }
-    },
-
-    // Update binding output configuration
-    updateBindingOutputConfig: async (id, pasteToWindow, saveToFile, outputPath) => {
-      const { settings, setUpdating } = get();
-      const updateKey = `binding_output_${id}`;
-
-      setUpdating(updateKey, true);
-
-      try {
-        // Optimistic update
-        set((state) => ({
-          settings: state.settings
-            ? {
-                ...state.settings,
-                bindings: {
-                  ...state.settings.bindings,
-                  [id]: {
-                    ...state.settings.bindings[id],
-                    paste_to_window: pasteToWindow,
-                    save_to_file: saveToFile,
-                    output_path: outputPath,
-                  },
-                },
-              }
-            : null,
-        }));
-
-        await invoke("update_binding_output_config", {
-          id,
-          pasteToWindow,
-          saveToFile,
-          outputPath,
-        });
-      } catch (error) {
-        console.error(`Failed to update binding output config for ${id}:`, error);
-
-        // Rollback on error
-        if (get().settings) {
-          await get().refreshSettings();
-        }
-      } finally {
-        setUpdating(updateKey, false);
-      }
-    },
-
-    // Reset a specific binding
-    resetBinding: async (id) => {
-      const { setUpdating, refreshSettings } = get();
-      const updateKey = `binding_${id}`;
-
-      setUpdating(updateKey, true);
-
-      try {
-        await invoke("reset_binding", { id });
-        await refreshSettings();
-      } catch (error) {
-        console.error(`Failed to reset binding ${id}:`, error);
-      } finally {
-        setUpdating(updateKey, false);
       }
     },
 
