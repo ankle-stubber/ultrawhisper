@@ -1,5 +1,6 @@
 use crate::managers::logs::LogManager;
-use chrono::Utc;
+use chrono::{SecondsFormat, Utc};
+use env_logger::{Builder, Env, Target};
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -15,8 +16,7 @@ pub struct CombinedLogger {
 
 impl CombinedLogger {
     pub fn new(log_manager: Arc<LogManager>, log_files: Vec<PathBuf>) -> Self {
-        // Build env_logger with default configuration
-        let env_logger = env_logger::Builder::from_default_env().build();
+        let env_logger = Self::build_env_logger();
 
         let mut sinks: Vec<Mutex<BufWriter<File>>> = Vec::new();
         for path in log_files {
@@ -34,6 +34,28 @@ impl CombinedLogger {
             log_manager,
             file_sinks: sinks,
         }
+    }
+
+    fn build_env_logger() -> env_logger::Logger {
+        let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
+        builder.target(Target::Stdout);
+
+        builder.format(|fmt, record| {
+            let ts = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+            let level = record.level();
+            let target = record.target();
+
+            writeln!(
+                fmt,
+                "{} {:<5} [{}] {}",
+                ts,
+                level,
+                target,
+                record.args()
+            )
+        });
+
+        builder.build()
     }
 
     /// Initialize the combined logger as the global logger

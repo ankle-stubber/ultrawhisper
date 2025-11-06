@@ -1,4 +1,5 @@
 use crate::destinations::{Destination, DestinationStorage};
+use log::{debug, info, warn};
 use tauri::State;
 
 /// List all destinations
@@ -6,6 +7,7 @@ use tauri::State;
 pub fn list_destinations(
     storage: State<DestinationStorage>,
 ) -> Result<Vec<Destination>, String> {
+    debug!("tauri command list_destinations invoked");
     storage.list().map_err(|e| e.to_string())
 }
 
@@ -15,6 +17,7 @@ pub fn get_destination(
     storage: State<DestinationStorage>,
     id: String,
 ) -> Result<Option<Destination>, String> {
+    debug!("tauri command get_destination invoked for id {}", id);
     storage.get(&id).map_err(|e| e.to_string())
 }
 
@@ -24,6 +27,7 @@ pub fn update_destination(
     storage: State<DestinationStorage>,
     destination: Destination,
 ) -> Result<(), String> {
+    info!("tauri command update_destination invoked for {}", destination.id);
     storage.update(destination).map_err(|e| e.to_string())
 }
 
@@ -33,6 +37,7 @@ pub fn create_destination(
     storage: State<DestinationStorage>,
     destination: Destination,
 ) -> Result<(), String> {
+    info!("tauri command create_destination invoked for {}", destination.id);
     storage.create(destination).map_err(|e| e.to_string())
 }
 
@@ -42,5 +47,6 @@ pub fn delete_destination(
     storage: State<DestinationStorage>,
     id: String,
 ) -> Result<(), String> {
+    warn!("tauri command delete_destination invoked for {}", id);
     storage.delete(&id).map_err(|e| e.to_string())
 }

@@ -5,6 +5,7 @@
 
 use super::types::{Destination, DestinationConfig};
 use anyhow::{Context, Result};
+use log::{debug, info};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tauri::AppHandle;
@@ -46,6 +47,7 @@ impl DestinationStorage {
             cache.insert(dest.id.clone(), dest);
         }
 
+        debug!("destination storage reloaded");
         Ok(())
     }
 
@@ -59,8 +61,10 @@ impl DestinationStorage {
         if let Some(v) = value {
             let destinations: Vec<Destination> = serde_json::from_value(v)
                 .context("Failed to deserialize destinations")?;
+            debug!("loaded {} destination(s) from disk", destinations.len());
             Ok(destinations)
         } else {
+            debug!("no destinations stored on disk; returning empty set");
             Ok(Vec::new())
         }
     }
@@ -73,6 +77,7 @@ impl DestinationStorage {
         store.set(DESTINATIONS_STORE_KEY, serde_json::to_value(destinations)?);
         store.save().context("Failed to save store")?;
 
+        debug!("persisted {} destination(s) to disk", destinations.len());
         Ok(())
     }
 
@@ -98,6 +103,9 @@ impl DestinationStorage {
         destination.validate()
             .context("Destination validation failed")?;
 
+        let dest_id = destination.id.clone();
+        let dest_name = destination.name.clone();
+
         // Check if ID already exists
         {
             let cache = self.cache.read()
@@ -113,12 +121,18 @@ impl DestinationStorage {
             let mut cache = self.cache.write()
                 .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
 
-            cache.insert(destination.id.clone(), destination);
+                cache.insert(destination.id.clone(), destination);
         }
 
         // Persist to disk
         let all_destinations = self.list()?;
         self.save_to_disk(&all_destinations)?;
+
+        info!(
+            "created destination '{}' ({})",
+            dest_name,
+            dest_id
+        );
 
         Ok(())
     }
@@ -128,6 +142,9 @@ impl DestinationStorage {
         // Validate the destination
         destination.validate()
             .context("Destination validation failed")?;
+
+        let dest_id = destination.id.clone();
+        let dest_name = destination.name.clone();
 
         // Check if destination exists
         {
@@ -151,6 +168,12 @@ impl DestinationStorage {
         let all_destinations = self.list()?;
         self.save_to_disk(&all_destinations)?;
 
+        info!(
+            "updated destination '{}' ({})",
+            dest_name,
+            dest_id
+        );
+
         Ok(())
     }
 
@@ -170,6 +193,8 @@ impl DestinationStorage {
         let all_destinations = self.list()?;
         self.save_to_disk(&all_destinations)?;
 
+        info!("deleted destination '{}'", id);
+
         Ok(())
     }
 
@@ -178,7 +203,10 @@ impl DestinationStorage {
         let cache = self.cache.read()
             .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))?;
 
-        Ok(cache.contains_key(id))
+        let exists = cache.contains_key(id);
+        debug!("destination exists check '{}': {}", id, exists);
+
+        Ok(exists)
     }
 }
 

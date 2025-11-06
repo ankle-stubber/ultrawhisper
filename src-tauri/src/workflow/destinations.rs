@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use tauri::AppHandle;
 
@@ -73,6 +74,7 @@ impl DestinationRouter {
 
         debug!("Routing transcription to {} destination(s)", self.destinations.len());
 
+        let total = self.destinations.len();
         for (idx, destination) in self.destinations.iter().enumerate() {
             debug!("Attempting to send to destination {}", idx + 1);
 
@@ -88,6 +90,24 @@ impl DestinationRouter {
             };
 
             results.push(result);
+        }
+
+        let successes = results
+            .iter()
+            .filter(|r| matches!(r, DestinationResult::Success))
+            .count();
+        let failures = total.saturating_sub(successes);
+
+        if failures == 0 {
+            info!(
+                "routed transcription '{}' to {} destination(s) successfully",
+                metadata.workflow_id, total
+            );
+        } else {
+            warn!(
+                "routed transcription '{}' with {} success(es) and {} failure(s)",
+                metadata.workflow_id, successes, failures
+            );
         }
 
         Ok(results)

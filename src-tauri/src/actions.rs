@@ -8,7 +8,7 @@ use crate::settings::get_settings;
 use crate::streaming::queue::create_bounded_queue;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils;
-use log::{debug, error};
+use log::{debug, error, info};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -51,6 +51,7 @@ struct UnifiedTranscribeAction;
 impl ShortcutAction for UnifiedTranscribeAction {
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
+        info!("shortcut start requested for binding {}", binding_id);
         debug!("UnifiedTranscribeAction::start called for binding: {}", binding_id);
 
         // Load model in the background
@@ -72,10 +73,15 @@ impl ShortcutAction for UnifiedTranscribeAction {
             "Recording mode - always_on: {}, streaming: {}",
             is_always_on, streaming_enabled
         );
+        info!(
+            "recording start context binding={} streaming={} always_on={}",
+            binding_id, streaming_enabled, is_always_on
+        );
 
         // Phase 2: Decide between streaming and batch mode
         if streaming_enabled {
             debug!("Starting streaming recording for binding: {}", binding_id);
+            info!("streaming recording started for binding {}", binding_id);
 
             // Create chunk queue
             let (chunk_tx, chunk_rx) = create_bounded_queue(settings.streaming.max_queue_size);
@@ -96,16 +102,17 @@ impl ShortcutAction for UnifiedTranscribeAction {
             let workflow_engine = Arc::clone(&app.state::<Arc<crate::workflow::WorkflowEngine>>());
             let app_clone = app.clone();
             let binding_id_clone = binding_id.clone();
+            let binding_id_for_task = binding_id.clone();
 
             tauri::async_runtime::spawn(async move {
                 debug!("Streaming workflow task started for binding: {}", binding_id_clone);
 
                 match workflow_engine
-                    .execute_binding_streaming(&app_clone, &binding_id_clone, chunk_rx)
+                    .execute_binding_streaming(&app_clone, &binding_id_for_task, chunk_rx)
                     .await
                 {
                     Ok(_result) => {
-                        debug!("Streaming workflow completed successfully");
+                        info!("streaming workflow completed successfully for binding {}", binding_id_for_task);
                         // Cleanup UI on success
                         utils::hide_recording_overlay(&app_clone);
                         change_tray_icon(&app_clone, TrayIconState::Idle);
@@ -132,6 +139,7 @@ impl ShortcutAction for UnifiedTranscribeAction {
         } else {
             // Batch mode (existing behavior)
             debug!("Starting batch recording for binding: {}", binding_id);
+            info!("batch recording started for binding {}", binding_id);
 
             if is_always_on {
                 // Always-on mode: Play audio feedback immediately
@@ -162,10 +170,16 @@ impl ShortcutAction for UnifiedTranscribeAction {
             "UnifiedTranscribeAction::start completed in {:?}",
             start_time.elapsed()
         );
+        info!(
+            "shortcut start finished for binding {} in {:?}",
+            binding_id,
+            start_time.elapsed()
+        );
     }
 
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let stop_time = Instant::now();
+        info!("shortcut stop requested for binding {}", binding_id);
         debug!("UnifiedTranscribeAction::stop called for binding: {}", binding_id);
 
         let ah = app.clone();
@@ -189,6 +203,7 @@ impl ShortcutAction for UnifiedTranscribeAction {
         // Phase 2: Check if this was a streaming recording
         if streaming_enabled {
             debug!("Stopping streaming recording for binding: {}", binding_id);
+            info!("stopping streaming recording for binding {}", binding_id);
 
             // Stop streaming recording (this flushes final chunk and closes queue)
             if let Err(e) = rm.stop_streaming_recording(&binding_id) {
@@ -201,12 +216,17 @@ impl ShortcutAction for UnifiedTranscribeAction {
             // The streaming workflow task spawned in start() will complete asynchronously
             // and handle history save, destination routing, and UI cleanup.
             debug!("Streaming recording stopped, workflow will complete asynchronously");
+            info!(
+                "streaming recording stopped for binding {}, awaiting workflow completion",
+                binding_id
+            );
             return;
         }
 
         // Batch mode (existing behavior)
+        let binding_id_for_task = binding_id.clone();
         tauri::async_runtime::spawn(async move {
-            let binding_id = binding_id.clone();
+            let binding_id = binding_id_for_task.clone();
             debug!(
                 "Starting async transcription task for binding: {}",
                 binding_id
@@ -375,6 +395,11 @@ impl ShortcutAction for UnifiedTranscribeAction {
 
         debug!(
             "UnifiedTranscribeAction::stop completed in {:?}",
+            stop_time.elapsed()
+        );
+        info!(
+            "shortcut stop finished for binding {} in {:?}",
+            binding_id,
             stop_time.elapsed()
         );
     }
